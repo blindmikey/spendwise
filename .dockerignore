@@ -1,0 +1,13 @@
+node_modules
+dist
+data
+preview-data
+archive
+tests
+build
+.claude
+*.md
+Dockerfile
+.dockerignore
+dev-server.mjs
+src/renderer/css/input.css

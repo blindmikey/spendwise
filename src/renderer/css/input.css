@@ -1,0 +1,51 @@
+@import "tailwindcss" source("../");
+
+/* Roca - display face for headings and big numbers. Self-hosted rather than
+   loaded from Typekit: the app must work offline (and under file:// in
+   Electron), and its CSP allows no remote origins.
+   The file is the Bold cut (OS/2 usWeightClass 700) and is the only weight we
+   have, so the face is declared across 700–900 - that way `font-black` (900)
+   matches it exactly instead of the browser faking a heavier weight. */
+@font-face {
+    font-family: 'Roca';
+    src: url('../fonts/roca.woff2') format('woff2'),
+         url('../fonts/roca.woff') format('woff');
+    font-weight: 700 900;
+    font-style: normal;
+    font-display: swap;
+}
+
+@theme {
+    --font-brand: 'Roca', ui-sans-serif, system-ui, sans-serif;
+    --color-zinc-350: color-mix(in oklab, var(--color-zinc-300), var(--color-zinc-400));
+}
+
+[x-cloak] { display: none !important; }
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+    20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+.animate-shake { animation: shake 0.5s ease; }
+
+/* Only the fields are meant to be selectable — dragging across a row or
+   double-clicking a button shouldn't highlight the app's own words. Editable
+   controls opt back in; so does anything worth copying, via `select-text`
+   (the database path, the web-access URLs). */
+body { user-select: none; }
+input, textarea, [contenteditable] { user-select: text; }
+
+/* disabled controls (read-only closed months): no hover feedback, default
+   cursor - pointer-events:none also suppresses hover: utility styles */
+button:disabled { pointer-events: none; }
+input:disabled, select:disabled { cursor: default; }
+
+/* number inputs: keep spinners subtle */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { opacity: 0.35; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-zinc-300); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-zinc-400); }

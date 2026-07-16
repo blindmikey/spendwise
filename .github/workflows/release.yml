@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'   # bare semver, e.g. 1.0.0
+      - 'v[0-9]+.[0-9]+.[0-9]+'  # v-prefixed also accepted
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # electron-builder names artifacts from package.json, not the tag, so a
+      # mismatch would ship "Spend Wise 1.0.0.exe" under a v1.1.0 release.
+      - name: Check tag matches package.json version
+        shell: pwsh
+        run: |
+          $pkg = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tag = "${{ github.ref_name }}" -replace '^v', ''
+          if ($pkg -ne $tag) {
+            throw "package.json version ($pkg) does not match tag ($tag)"
+          }
+          Write-Host "version $pkg matches tag $tag"
+
+      - run: npm ci
+
+      - run: npm test
+
+      - name: Build and publish installers
+        run: npm run dist -- --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

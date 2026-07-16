@@ -1,0 +1,62 @@
+{
+  "name": "spendwise",
+  "productName": "Spend Wise",
+  "version": "1.0.0",
+  "description": "A Simple and easy-to-use envelope-budgeting app",
+  "author": "blindmikey <github@blindmikey.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/blindmikey/spendwise.git"
+  },
+  "type": "module",
+  "main": "src/main/main.js",
+  "bin": {
+    "spendwise-server": "src/server/cli.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "files": [
+    "src/**/*",
+    "!src/renderer/css/input.css",
+    "README.md"
+  ],
+  "scripts": {
+    "start": "electron .",
+    "serve": "node src/server/cli.mjs",
+    "css": "tailwindcss -i src/renderer/css/input.css -o src/renderer/css/app.css --minify",
+    "css:watch": "tailwindcss -i src/renderer/css/input.css -o src/renderer/css/app.css --watch",
+    "test": "vitest run",
+    "dist": "npm run css && electron-builder",
+    "prepublishOnly": "npm run css"
+  },
+  "dependencies": {
+    "lowdb": "^7.0.1"
+  },
+  "devDependencies": {
+    "@alpinejs/collapse": "^3.14.0",
+    "@tailwindcss/cli": "^4.0.0",
+    "alpinejs": "^3.14.0",
+    "apexcharts": "^4.0.0",
+    "electron": "^37.0.0",
+    "electron-builder": "^25.0.0",
+    "tailwindcss": "^4.0.0",
+    "vitest": "^3.0.0"
+  },
+  "build": {
+    "appId": "com.blindmikey.spendwise",
+    "files": [
+      "src/**/*",
+      "!src/renderer/css/input.css"
+    ],
+    "win": {
+      "target": ["nsis", "portable"],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

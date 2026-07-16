@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- unsafe-eval is required by Alpine's expression evaluator; everything is local, no remote origins -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'">
+    <title>Spend Wise</title>
+    <link rel="icon" type="image/png" href="assets/icon.ico">
+    <link rel="apple-touch-icon" href="assets/icon.png">
+    <!-- installable web app (served builds only; harmless under file://).
+         use-credentials: the manifest sits behind the session cookie, and a
+         credential-less fetch would just get the login page back -->
+    <link rel="manifest" href="manifest.json" crossorigin="use-credentials">
+    <meta name="theme-color" content="#059669">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Spend Wise">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="stylesheet" href="css/app.css">
+
+    <script src="vendor/apexcharts.min.js"></script>
+    <script src="../shared/engine.js"></script>
+    <script src="js/helpers.js"></script>
+    <script src="js/components.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/views/month.js"></script>
+    <script src="js/views/insights.js"></script>
+    <script src="js/views/settings.js"></script>
+    <script src="js/app.js"></script>
+    <script defer src="vendor/alpine-collapse.min.js"></script>
+    <script defer src="vendor/alpine.min.js"></script>
+</head>
+<body class="bg-zinc-50 text-zinc-900 antialiased">
+
+<!-- icon sprite. Icons from Font Awesome Free v7.3.0 (fontawesome.com),
+     license: https://fontawesome.com/license/free - Copyright 2026 Fonticons, Inc. -->
+<svg xmlns="http://www.w3.org/2000/svg" class="hidden" aria-hidden="true">
+    <symbol id="i-plus" viewBox="0 0 640 640"><path fill="currentColor" d="M352 128C352 110.3 337.7 96 320 96C302.3 96 288 110.3 288 128L288 288L128 288C110.3 288 96 302.3 96 320C96 337.7 110.3 352 128 352L288 352L288 512C288 529.7 302.3 544 320 544C337.7 544 352 529.7 352 512L352 352L512 352C529.7 352 544 337.7 544 320C544 302.3 529.7 288 512 288L352 288L352 128z"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 640 640"><path fill="currentColor" d="M96 320C96 302.3 110.3 288 128 288L512 288C529.7 288 544 302.3 544 320C544 337.7 529.7 352 512 352L128 352C110.3 352 96 337.7 96 320z"/></symbol>
+    <symbol id="i-xmark" viewBox="0 0 640 640"><path fill="currentColor" d="M183.1 137.4C170.6 124.9 150.3 124.9 137.8 137.4C125.3 149.9 125.3 170.2 137.8 182.7L275.2 320L137.9 457.4C125.4 469.9 125.4 490.2 137.9 502.7C150.4 515.2 170.7 515.2 183.2 502.7L320.5 365.3L457.9 502.6C470.4 515.1 490.7 515.1 503.2 502.6C515.7 490.1 515.7 469.8 503.2 457.3L365.8 320L503.1 182.6C515.6 170.1 515.6 149.8 503.1 137.3C490.6 124.8 470.3 124.8 457.8 137.3L320.5 274.7L183.1 137.4z"/></symbol>
+    <symbol id="i-percent" viewBox="0 0 640 640"><path fill="currentColor" d="M192 144C218.5 144 240 165.5 240 192C240 218.5 218.5 240 192 240C165.5 240 144 218.5 144 192C144 165.5 165.5 144 192 144zM192 288C245 288 288 245 288 192C288 139 245 96 192 96C139 96 96 139 96 192C96 245 139 288 192 288zM448 400C474.5 400 496 421.5 496 448C496 474.5 474.5 496 448 496C421.5 496 400 474.5 400 448C400 421.5 421.5 400 448 400zM448 544C501 544 544 501 544 448C544 395 501 352 448 352C395 352 352 395 352 448C352 501 395 544 448 544zM537 137C546.4 127.6 546.4 112.4 537 103.1C527.6 93.8 512.4 93.7 503.1 103.1L103 503C93.6 512.4 93.6 527.6 103 536.9C112.4 546.2 127.6 546.3 136.9 536.9L537 137z"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 640 640"><path fill="currentColor" d="M96.5 160L96.5 309.5C96.5 326.5 103.2 342.8 115.2 354.8L307.2 546.8C332.2 571.8 372.7 571.8 397.7 546.8L547.2 397.3C572.2 372.3 572.2 331.8 547.2 306.8L355.2 114.8C343.2 102.7 327 96 310 96L160.5 96C125.2 96 96.5 124.7 96.5 160zM208.5 176C226.2 176 240.5 190.3 240.5 208C240.5 225.7 226.2 240 208.5 240C190.8 240 176.5 225.7 176.5 208C176.5 190.3 190.8 176 208.5 176z"/></symbol>
+    <symbol id="i-tags" viewBox="0 0 640 640"><path fill="currentColor" d="M433.2 103.1L581.4 253.4C609.1 281.5 609.1 326.5 581.4 354.6L425 512.9C415.7 522.3 400.5 522.4 391.1 513.1C381.7 503.8 381.6 488.6 390.9 479.2L547.3 320.8C556.5 311.5 556.5 296.4 547.3 287.1L399 136.9C389.7 127.5 389.8 112.3 399.2 103C408.6 93.7 423.8 93.8 433.1 103.2zM64.1 293.5L64.1 160C64.1 124.7 92.8 96 128.1 96L261.6 96C278.6 96 294.9 102.7 306.9 114.7L450.9 258.7C475.9 283.7 475.9 324.2 450.9 349.2L317.4 482.7C292.4 507.7 251.9 507.7 226.9 482.7L82.9 338.7C70.9 326.7 64.2 310.4 64.2 293.4zM208.1 208C208.1 190.3 193.8 176 176.1 176C158.4 176 144.1 190.3 144.1 208C144.1 225.7 158.4 240 176.1 240C193.8 240 208.1 225.7 208.1 208z"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 640 640"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path fill="currentColor" d="M160 96C160 78.3 174.3 64 192 64L448 64C465.7 64 480 78.3 480 96C480 113.7 465.7 128 448 128L418.5 128L428.8 262.1C465.9 283.3 494.6 318.5 507 361.8L510.8 375.2C513.6 384.9 511.6 395.2 505.6 403.3C499.6 411.4 490 416 480 416L160 416C150 416 140.5 411.3 134.5 403.3C128.5 395.3 126.5 384.9 129.3 375.2L133 361.8C145.4 318.5 174 283.3 211.2 262.1L221.5 128L192 128C174.3 128 160 113.7 160 96zM288 464L352 464L352 576C352 593.7 337.7 608 320 608C302.3 608 288 593.7 288 576L288 464z"/></svg></symbol>
+    <symbol id="i-clock" viewBox="0 0 640 640"><path fill="currentColor" d="M320 64C461.4 64 576 178.6 576 320C576 461.4 461.4 576 320 576C178.6 576 64 461.4 64 320C64 178.6 178.6 64 320 64zM296 184L296 320C296 328 300 335.5 306.7 340L402.7 404C413.7 411.4 428.6 408.4 436 397.3C443.4 386.2 440.4 371.4 429.3 364L344 307.2L344 184C344 170.7 333.3 160 320 160C306.7 160 296 170.7 296 184z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 640 640"><path fill="currentColor" d="M530.8 134.1C545.1 144.5 548.3 164.5 537.9 178.8L281.9 530.8C276.4 538.4 267.9 543.1 258.5 543.9C249.1 544.7 240 541.2 233.4 534.6L105.4 406.6C92.9 394.1 92.9 373.8 105.4 361.3C117.9 348.8 138.2 348.8 150.7 361.3L252.2 462.8L486.2 141.1C496.6 126.8 516.6 123.6 530.9 134z"/></symbol>
+    <symbol id="i-bulb" viewBox="0 0 640 640"><path fill="currentColor" d="M420.9 448C428.2 425.7 442.8 405.5 459.3 388.1C492 353.7 512 307.2 512 256C512 150 426 64 320 64C214 64 128 150 128 256C128 307.2 148 353.7 180.7 388.1C197.2 405.5 211.9 425.7 219.1 448L420.8 448zM416 496L224 496L224 512C224 556.2 259.8 592 304 592L336 592C380.2 592 416 556.2 416 512L416 496zM312 176C272.2 176 240 208.2 240 248C240 261.3 229.3 272 216 272C202.7 272 192 261.3 192 248C192 181.7 245.7 128 312 128C325.3 128 336 138.7 336 152C336 165.3 325.3 176 312 176z"/></symbol>
+    <symbol id="i-kebab" viewBox="0 0 640 640"><circle fill="currentColor" cx="320" cy="168" r="56"/><circle fill="currentColor" cx="320" cy="320" r="56"/><circle fill="currentColor" cx="320" cy="472" r="56"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 640 640"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path fill="currentColor" d="M297.4 470.6C309.9 483.1 330.2 483.1 342.7 470.6L534.7 278.6C547.2 266.1 547.2 245.8 534.7 233.3C522.2 220.8 501.9 220.8 489.4 233.3L320 402.7L150.6 233.4C138.1 220.9 117.8 220.9 105.3 233.4C92.8 245.9 92.8 266.2 105.3 278.7L297.3 470.7z"/></svg></symbol>
+</svg>
+
+<div x-data="appRoot()" x-cloak>
+
+    <!-- lock screen: casual privacy for shared computers (web logs in at the server) -->
+    <template x-if="$store.ui.locked">
+        <div class="fixed inset-0 z-[100] bg-zinc-100 flex items-center justify-center" x-data="{ pw: '', busy: false, bad: false }">
+            <form class="bg-white border border-zinc-200 rounded-xl shadow-lg p-8 w-80 text-center" :class="bad && 'animate-shake'"
+                @submit.prevent="busy = true; bad = false; window.api.authVerify({ password: pw }).then((r) => {
+                    busy = false;
+                    if (r.ok && r.valid) { $store.ui.locked = false; } else { bad = true; pw = ''; }
+                })">
+                <img src="assets/icon.ico" alt="" class="h-10 w-10 mx-auto mb-2" draggable="false">
+                <h2 class="font-black font-brand text-lg text-emerald-700 mb-4 select-none">Spend Wise</h2>
+                <input type="password" x-model="pw" placeholder="App password" x-init="$nextTick(() => $el.focus())"
+                    class="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm text-center focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                <button type="submit" :disabled="busy || !pw"
+                    class="mt-3 w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-md py-2 text-sm font-bold cursor-pointer transition-colors disabled:bg-zinc-200 disabled:text-zinc-400">Unlock</button>
+                <p x-show="bad" class="text-xs text-red-600 mt-2">Wrong password</p>
+            </form>
+        </div>
+    </template>
+
+    <!-- ================================================== header -->
+    <header class="bg-white border-b border-zinc-200 sticky top-0 z-30">
+        <div class="max-w-screen-2xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-2.5 select-none shrink-0">
+                <!-- the piggy's visual mass sits ~10% low in its square (light
+                     slot/ears on top, heavy body below), so a geometrically
+                     centred icon reads low. -2.5px puts its centre of mass on
+                     the header's centreline, where the wordmark's caps already sit. -->
+                <img src="assets/icon.ico" alt="" class="h-7 w-7 block shrink-0 relative -top-[3px]" draggable="false">
+                <!-- Roca's font box is lopsided (19px ascent / 10px descent at
+                     20px), so items-center centres the BOX and leaves the visible
+                     letters riding high. Same 0.15em correction as the group
+                     titles - measured, and scales with font-size. -->
+                <h1 class="font-black font-brand tracking-tight text-2xl leading-none text-emerald-700 hidden sm:block relative top-[0.125em]">Spend Wise</h1>
+            </div>
+            <div class="flex items-center gap-2 sm:gap-4">
+                <!-- month picker (month view only): status tag + selector.
+                     x-if, not x-show: a hidden element's children still
+                     evaluate, and these read $store.data.db.months before the
+                     db has loaded -->
+                <template x-if="$store.ui.view === 'month' && $store.data.db && $store.ui.currentKey && $store.data.db.months[$store.ui.currentKey]">
+                <div class="flex items-center gap-2">
+                    <span x-show="JSON.stringify($store.data.db.months[$store.ui.currentKey]) !== $store.ui.savedSnapshot"
+                        class="text-amber-500 select-none" title="Unsaved changes">●</span>
+                    <!-- on phones the open/closed pill lives in the This Month panel instead
+                         (which sits inside main, so it goes with it while switching) -->
+                    <span x-show="!$store.ui.switching"
+                        class="hidden sm:inline-block text-[10px] uppercase tracking-widest font-bold px-2.5 py-1 rounded-full select-none"
+                        :class="$store.data.db.months[$store.ui.currentKey].status === 'closed'
+                            ? ($store.ui.unlockedKeys.includes($store.ui.currentKey) ? 'bg-amber-100 text-amber-700' : 'bg-zinc-200 text-zinc-500')
+                            : 'bg-emerald-100 text-emerald-700'"
+                        x-text="$store.data.db.months[$store.ui.currentKey].status === 'closed'
+                            ? ($store.ui.unlockedKeys.includes($store.ui.currentKey) ? 'closed · editing' : 'closed') : 'open'"></span>
+                    <select :value="$store.ui.currentKey"
+                        @change="$store.ui.monthGoto && $store.ui.monthGoto($event.target.value).then(() => { $el.value = $store.ui.currentKey })"
+                        class="border border-zinc-300 bg-white rounded-md px-2.5 py-1 text-sm font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                        <template x-for="k in FinEngine.monthKeys($store.data.db).slice().reverse()" :key="k">
+                            <option :value="k" :selected="k === $store.ui.currentKey" x-text="FinEngine.keyLabel(k)"></option>
+                        </template>
+                    </select>
+                </div>
+                </template>
+                <nav class="flex gap-1 items-center">
+                <button type="button" @click="switchView('month')"
+                    class="px-2.5 sm:px-4 py-1.5 rounded-md text-sm font-semibold transition-colors cursor-pointer"
+                    :class="$store.ui.view === 'month' ? 'bg-emerald-600 text-white' : 'text-zinc-500 hover:bg-zinc-100'">Month</button>
+                <button type="button" @click="switchView('insights')" title="Insights"
+                    class="px-2.5 sm:px-4 py-1.5 rounded-md text-sm font-semibold transition-colors cursor-pointer flex items-center"
+                    :class="$store.ui.view === 'insights' ? 'bg-emerald-600 text-white' : 'text-zinc-500 hover:bg-zinc-100'">
+                    <span class="hidden sm:inline">Insights</span>
+                    <svg class="w-4 h-4 sm:hidden"><use href="#i-bulb"/></svg>
+                </button>
+                <button type="button" @click="switchView('settings')"
+                    :title="$store.data.update.available ? 'Settings — version ' + $store.data.update.latest + ' is available' : 'Settings'"
+                    class="relative p-1.5 rounded-md transition-colors cursor-pointer"
+                    :class="$store.ui.view === 'settings' ? 'bg-emerald-600 text-white' : 'text-zinc-500 hover:bg-zinc-100'">
+                    <!-- the launch toast fades; this doesn't, so the nudge survives
+                         without ever blocking the books -->
+                    <span x-show="$store.data.update.available" aria-hidden="true"
+                        class="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white"></span>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5" aria-hidden="true">
+                        <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+                    </svg>
+                </button>
+            </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- offline (web clients only): every save needs the server, so the app
+         goes read-only rather than letting edits pile up with nowhere to go -->
+    <div x-show="$store.ui.offline" x-cloak
+        class="bg-amber-100 border-b border-amber-300 text-amber-900 text-xs text-center py-2 px-4 sticky top-14 z-20 select-none">
+        <span class="font-bold">Offline</span> - can’t reach the server. Editing is paused until the connection
+        returns; anything you already typed is still here.
+    </div>
+
+    <!-- hidden while a month change renders, so the "loading…" below shows through -->
+    <main class="max-w-screen-2xl mx-auto px-2.5 sm:px-6 py-4 sm:py-6" x-show="$store.data.loaded && !$store.ui.switching">
+
+        <!-- ============================================ month view -->
+        <div x-data="monthView()" x-show="$store.ui.view === 'month'" @keydown.window="hotkeys($event)"
+            @scroll.window="tagSuggestOpen = false; rowMenuFor = null"
+            @db-refreshed.window="refreshRateCache(); resetHistory(); renderChart()"
+            @resize.window.debounce.500ms="renderChart()">
+
+            <template x-if="month">
+                <div>
+                    <div class="flex flex-col xl:flex-row gap-6 items-start">
+
+                        <!-- ================================ groups -->
+                        <!-- NOT a blanket disabled fieldset: tags are field-lifetime
+                             metadata (no money math, self-persisting), so tag controls
+                             stay usable on closed months - every OTHER control carries
+                             :disabled="frozen" individually, since HTML offers no
+                             per-child opt-out inside a disabled fieldset -->
+                        <fieldset class="flex-1 w-full min-w-0 border-0 m-0 p-0 order-2 xl:order-none">
+                            <template x-for="group in month.groups" :key="group.groupId">
+                                <section class="mb-5 bg-white rounded-lg border border-zinc-200 shadow-sm overflow-hidden">
+                                    <header @click="toggleCollapsed(group.groupId)"
+                                        class="flex justify-between items-center px-4 py-2.5 bg-emerald-600 text-white cursor-pointer select-none">
+                                        <!-- the amount is the preferred item: it never wraps or shrinks;
+                                             the title takes whatever room is left (min-w-0 lets it).
+                                             top-[0.15em]: Roca's line box is taller above the caps than
+                                             below them, so items-center leaves the title riding high -
+                                             the nudge drops it onto the amount's optical centre (holds
+                                             for wrapped titles too, and scales with font-size). -->
+                                        <span class="uppercase tracking-widest font-bold text-sm flex-1 min-w-0 relative" x-text="group.title"></span>
+                                        <span class="flex items-center gap-3 shrink-0 whitespace-nowrap">
+                                            <span class="font-mono text-sm"
+                                                x-text="(group.kind === 'income' ? '+ ' : '− ') + fmt(groupTotal(group))"></span>
+                                            <span class="w-4 flex items-center justify-center">
+                                                <svg x-show="collapsed[group.groupId]" class="w-3.5 h-3.5 rotate-180"><use href="#i-chevron"/></svg>
+                                                <svg x-show="!collapsed[group.groupId]" class="w-3.5 h-3.5"><use href="#i-chevron"/></svg>
+                                            </span>
+                                        </span>
+                                    </header>
+                                    <div x-show="!collapsed[group.groupId]" x-collapse.duration.200ms>
+                                        <div class="p-2.5 sm:p-4">
+                                            <p class="text-xs text-zinc-400 mb-3 grayscale" x-text="groupHint(group.kind)"></p>
+
+                                            <!-- column headers for envelope/goal groups -->
+                                            <div x-show="(group.kind === 'envelope' || group.kind === 'goal') && group.fields.length"
+                                                class="max-sm:hidden flex items-center gap-1.5 mb-1 text-[10px] uppercase tracking-widest text-zinc-350 select-none">
+                                                <span class="flex-1 min-w-28"></span>
+                                                <span class="w-24 shrink-0 text-center">monthly</span>
+                                                <span class="w-24 shrink-0 text-right" title="Sum of expense rows assigned to this envelope">spent</span>
+                                                <span class="w-24 shrink-0 text-right">available</span>
+                                                <span x-show="group.kind === 'goal'" class="w-24 shrink-0 text-center">target</span>
+                                                <span class="w-7 shrink-0"></span>
+                                                <span class="w-8 shrink-0"></span>
+                                                <span class="w-7 shrink-0"></span>
+                                                <span class="w-7 shrink-0"></span>
+                                            </div>
+
+                                            <template x-for="(field, fi) in group.fields" :key="field.id">
+                                                <!-- max-sm:mb-5: on phones a row is two lines, so the space BETWEEN
+                                                     rows has to beat the space within one - otherwise line 2 reads as
+                                                     belonging to the row underneath it.
+                                                     @focusin (it bubbles, unlike focus) closes an editor left open on
+                                                     another row. The editors' own controls live inside this wrapper,
+                                                     so using them keeps focus in-row and the editor stays put. -->
+                                                <div class="mb-2.5 max-sm:mb-5" @focusin="rowFocused(field)">
+                                                        <!-- phones: rows wrap into [pin][label][value][paid][⋮] on line 1,
+                                                         then spent/available/target/link on line 2 (max-sm
+                                                         order utilities); desktop keeps the single DOM-order row -->
+                                                    <!-- max-sm:justify-between spreads LINE 2's detail pairs across the
+                                                         width; line 1 is unaffected because the label input (flex-1)
+                                                         already eats its free space -->
+                                                    <div class="flex items-center gap-1.5 flex-wrap sm:flex-nowrap max-sm:justify-between">
+                                                        <!-- pin — income/expense only. Budgets are standing accounts:
+                                                             they always carry forward, so there's nothing to toggle.
+                                                             Retiring one is a delete (empty it first to return the
+                                                             remaining balance to income). -->
+                                                        <!-- pin stays disabled on a closed month even while it's unlocked
+                                                             for editing: `pinned` is read only by rollover, at close-out,
+                                                             and that already happened here — toggling it now would look
+                                                             meaningful but change nothing downstream. -->
+                                                        <template x-if="!FinEngine.isEnvelopeKind(group.kind)">
+                                                            <button type="button" @click="field.pinned = !field.pinned" :disabled="frozen || isClosed"
+                                                                :title="isClosed
+                                                                    ? (field.pinned ? 'Was carried into the next month' : 'Was not carried forward')
+                                                                    : (field.pinned ? 'Carries into future months' : 'This month only - click to pin')"
+                                                                class="max-sm:order-1 w-7 h-7 shrink-0 rounded flex items-center justify-center cursor-pointer transition-colors"
+                                                                :class="field.pinned ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-300 hover:text-zinc-500'"><svg class="w-3.5 h-3.5"><use href="#i-pin"/></svg></button>
+                                                        </template>
+
+                                                        <div class="relative flex-1 min-w-28 max-sm:order-2">
+                                                            <input type="text" x-model="field.label" placeholder="Label" :disabled="frozen"
+                                                                class="w-full border rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white focus:outline-none focus:ring-1"
+                                                                :class="group.kind === 'envelope' && overBudget(field)
+                                                                    ? 'border-red-400 focus:ring-red-400'
+                                                                    : 'border-zinc-200 focus:ring-emerald-500'">
+                                                            <!-- goal budgets: subtle funding underline (partial-width
+                                                                 "border" - a real border can't stop partway).
+                                                                 green while filling/funded, amber when full and idle -->
+                                                            <div x-show="group.kind === 'goal' && FinEngine.num(field.target) > 0"
+                                                                class="absolute bottom-[3px] left-[3px] right-[3px] h-[3px] pointer-events-none">
+                                                                <div class="h-full rounded-full transition-all duration-300"
+                                                                    :class="progress(field).reached && contrib(group, field) === 0 ? 'bg-amber-400' : 'bg-emerald-400'"
+                                                                    :style="'width:' + progress(field).pct + '%'"></div>
+                                                            </div>
+                                                            <!-- envelope budgets: budget-health fuel gauge -
+                                                                 % of available budget still unspent. hidden until
+                                                                 spending starts, amber at ≤20% left, red dot
+                                                                 (min-width) when empty; overspend also reddens
+                                                                 the label input's border -->
+                                                            <div x-show="group.kind === 'envelope' && health(field).show"
+                                                                class="absolute bottom-[3px] left-[3px] right-[3px] h-[3px] pointer-events-none">
+                                                                <div class="h-full rounded-full transition-all duration-300"
+                                                                    :class="health(field).empty ? 'bg-red-400' : (health(field).pct <= 20 ? 'bg-amber-400' : 'bg-emerald-400')"
+                                                                    :style="'width:max(' + health(field).pct + '%, 6px)'"></div>
+                                                            </div>
+                                                        </div>
+
+                                                        <!-- phones: the wrap between line 1 and line 2 -->
+                                                        <div class="basis-full h-0 sm:hidden max-sm:order-5" aria-hidden="true"></div>
+
+                                                        <template x-if="!isAuto(field) && !isSched(group, field)">
+                                                            <div class="relative shrink-0 max-sm:order-3">
+                                                                <span class="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 text-xs select-none">$</span>
+                                                                <!-- cents are for income/expense amounts only; budget
+                                                                     allotments stay whole dollars. Group totals round
+                                                                     the cents away (income down, spending up). -->
+                                                                <input type="number" x-model.number="field.value" :disabled="frozen"
+                                                                    :step="FinEngine.isEnvelopeKind(group.kind) ? '1' : '0.01'"
+                                                                    :title="group.kind === 'expense' && field.budgetId && !FinEngine.num(field.value)
+                                                                        ? 'Linked to an envelope but $0 - it draws nothing until an amount is entered'
+                                                                        : (group.kind === 'envelope' || group.kind === 'goal' ? 'Monthly allotment' : 'Amount')"
+                                                                    class="w-24 max-sm:w-20 border border-zinc-200 rounded pl-5 pr-1 py-1.5 text-sm text-right bg-zinc-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                                                    :class="group.kind === 'expense' && field.budgetId && !FinEngine.num(field.value) && 'ring-1 ring-amber-400 bg-amber-50'">
+                                                            </div>
+                                                        </template>
+                                                        <template x-if="isAuto(field) && !isSched(group, field)">
+                                                            <span class="w-24 max-sm:w-20 max-sm:order-3 shrink-0 text-right text-sm tabular-nums font-semibold text-violet-600 pr-1 select-none"
+                                                                :title="'Auto-funded: ' + field.auto.pct + '% of the selected groups’ net'"
+                                                                x-text="fmt(rateOf(field))"></span>
+                                                        </template>
+                                                        <template x-if="isSched(group, field)">
+                                                            <span class="w-24 max-sm:w-20 max-sm:order-3 shrink-0 text-right text-sm tabular-nums font-semibold text-violet-600 pr-1 select-none"
+                                                                :title="'Scheduled deposit: ' + fmt(field.target) + ' due ' + FinEngine.keyLabel(field.dueKey) + ' - headroom spread over the months remaining'"
+                                                                x-text="fmt(field.value)"></span>
+                                                        </template>
+
+                                                        <!-- envelope / goal: derived spent · available. Two separate
+                                                             items so justify-between can space them apart on phones -
+                                                             sm:contents dissolves each pair on desktop, leaving the
+                                                             value spans as direct row children (the fixed columns). -->
+                                                        <template x-if="group.kind === 'envelope' || group.kind === 'goal'">
+                                                            <div class="max-sm:order-6 max-sm:flex max-sm:items-center max-sm:gap-1.5 shrink-0 sm:contents">
+                                                                <span class="sm:hidden shrink-0 text-[10px] uppercase tracking-widest text-zinc-350 select-none">spent</span>
+                                                                <span class="w-24 max-sm:w-auto shrink-0 text-right text-xs tabular-nums select-none"
+                                                                    :class="effSpent(field) > 0 ? (overBudget(field) ? 'text-red-600 font-semibold' : 'text-emerald-600') : 'text-zinc-300'"
+                                                                    :title="'Spent from this envelope - expense rows assigned to it via the “from” dropdown' + (FinEngine.num(field.spent) > 0 ? ' (includes ' + fmt(field.spent) + ' carried from the legacy import)' : '')"
+                                                                    x-text="fmt(effSpent(field))"></span>
+                                                            </div>
+                                                        </template>
+                                                        <template x-if="group.kind === 'envelope' || group.kind === 'goal'">
+                                                            <div class="max-sm:order-6 max-sm:flex max-sm:items-center max-sm:gap-1.5 shrink-0 sm:contents">
+                                                                <span class="sm:hidden shrink-0 text-[10px] uppercase tracking-widest text-zinc-350 select-none">available</span>
+                                                                <span class="w-24 max-sm:w-auto shrink-0 text-right text-xs tabular-nums font-semibold select-none"
+                                                                    :class="overBudget(field) ? 'text-red-600' : (progress(field).reached ? 'text-amber-600' : 'text-zinc-600')"
+                                                                    :title="progress(field).reached ? 'At the cap - holds here until spent' : 'Available in this envelope right now'"
+                                                                    x-text="fmt(field.avail)"></span>
+                                                            </div>
+                                                        </template>
+
+                                                        <!-- goal: target (label on phones - the placeholder only
+                                                             says "target" while the field is empty) -->
+                                                        <template x-if="group.kind === 'goal'">
+                                                            <div class="flex items-center gap-1.5 shrink-0 max-sm:order-7">
+                                                                <span class="sm:hidden shrink-0 text-[10px] uppercase tracking-widest text-zinc-350 select-none">target</span>
+                                                                <div class="relative" title="Goal target">
+                                                                    <span class="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 text-xs select-none">$</span>
+                                                                    <input type="number" x-model.number="field.target" placeholder="target" :disabled="frozen"
+                                                                        class="w-24 max-sm:w-20 border border-zinc-200 rounded pl-5 pr-1 py-1.5 text-sm text-right bg-zinc-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                                                </div>
+                                                            </div>
+                                                        </template>
+
+                                                        <!-- expense: draw from envelope. On phones it needs a label -
+                                                             an unlinked row is just a lone "-" otherwise. "from" is
+                                                             what this control is called elsewhere in the UI copy. -->
+                                                        <template x-if="group.kind === 'expense'">
+                                                            <div class="flex items-center gap-1.5 shrink-0 max-sm:order-7">
+                                                                <span class="sm:hidden shrink-0 text-[10px] uppercase tracking-widest text-zinc-350 select-none">from</span>
+                                                                <!-- accept only values that resolve to a real envelope: a
+                                                                     committed option with no value attribute falls back to
+                                                                     its TEXT ("-"), which must never land in budgetId -->
+                                                                <select @change="field.budgetId = budgetOptions.some((o) => o.id && o.id === $event.target.value) ? $event.target.value : null"
+                                                                    :disabled="frozen" title="Draw this expense from an envelope"
+                                                                    x-effect="budgetOptions; field.budgetId; $nextTick(() => { $el.value = field.budgetId || ''; })"
+                                                                    class="w-[calc(100%-24px)] sm:w-[198px] shrink-0 text-xs border border-zinc-200 rounded py-2 px-1 bg-zinc-50 cursor-pointer focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                                                    :class="field.budgetId && 'text-emerald-700 font-semibold'">
+                                                                    <template x-for="opt in budgetOptions" :key="opt.id">
+                                                                        <!-- x-effect, not :value - Alpine drops the value
+                                                                             ATTRIBUTE for an empty string -->
+                                                                        <option x-effect="$el.value = opt.id" :selected="opt.id === (field.budgetId || '')" x-text="opt.label"></option>
+                                                                    </template>
+                                                                </select>
+                                                            </div>
+                                                        </template>
+
+                                                        <!-- paid (not for envelopes) -->
+                                                        <template x-if="group.kind === 'income' || group.kind === 'expense'">
+                                                            <button type="button" @click="field.accounted = !field.accounted" :disabled="frozen"
+                                                                :title="field.accounted ? 'Marked as paid / received' : 'Mark as paid / received'"
+                                                                class="w-7 h-7 shrink-0 max-sm:order-4 rounded flex items-center justify-center cursor-pointer transition-colors"
+                                                                :class="field.accounted ? 'bg-emerald-500 text-white' : 'bg-zinc-100 text-zinc-300 hover:text-zinc-500'"><svg class="w-3.5 h-3.5"><use href="#i-check"/></svg></button>
+                                                        </template>
+
+                                                        <!-- envelope: auto-fund -->
+                                                        <template x-if="group.kind === 'envelope'">
+                                                            <button type="button" @click="toggleAutoEditor(field)" :disabled="frozen"
+                                                                title="Auto-fund: derive this monthly amount from a percentage of other groups (e.g. 33% of self-employment net)"
+                                                                class="max-sm:hidden w-7 h-7 shrink-0 rounded flex items-center justify-center cursor-pointer transition-colors"
+                                                                :class="isAuto(field) ? 'bg-violet-100 text-violet-700' : 'bg-zinc-100 text-zinc-300 hover:text-zinc-500'"><svg class="w-3.5 h-3.5"><use href="#i-percent"/></svg></button>
+                                                        </template>
+
+                                                        <!-- goal: schedule -->
+                                                        <template x-if="group.kind === 'goal'">
+                                                            <button type="button" @click="toggleSchedEditor(field)" :disabled="frozen"
+                                                                title="Schedule: set a due date and frequency and the monthly deposit is calculated for you - great for recurring bills"
+                                                                class="max-sm:hidden w-7 h-7 shrink-0 rounded flex items-center justify-center cursor-pointer transition-colors"
+                                                                :class="field.dueKey ? 'bg-violet-100 text-violet-700' : 'bg-zinc-100 text-zinc-300 hover:text-zinc-500'"><svg class="w-3.5 h-3.5"><use href="#i-clock"/></svg></button>
+                                                        </template>
+
+                                                        <!-- tags -->
+                                                        <button type="button" @click="toggleTagEditor(field)" title="Tags" :disabled="offline"
+                                                            class="max-sm:hidden w-8 h-7 shrink-0 rounded flex items-center justify-center cursor-pointer transition-colors"
+                                                            :class="(field.tags && field.tags.length) ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-300 hover:text-zinc-500'">
+                                                            <svg x-show="!(field.tags && field.tags.length > 1)" class="w-3.5 h-3.5"><use href="#i-tag"/></svg>
+                                                            <svg x-show="field.tags && field.tags.length > 1" class="w-4 h-4"><use href="#i-tags"/></svg>
+                                                        </button>
+
+                                                        <button type="button" @click="removeField(group, field)" :disabled="frozen" title="Remove this field"
+                                                            class="max-sm:hidden w-7 h-7 shrink-0 rounded flex items-center justify-center cursor-pointer bg-zinc-100 text-zinc-400 hover:bg-red-100 hover:text-red-600 transition-colors"><svg class="w-3.5 h-3.5"><use href="#i-xmark"/></svg></button>
+                                                        <button type="button" @click="addField(group, fi)" :disabled="frozen" title="Add a field below"
+                                                            class="max-sm:hidden w-7 h-7 shrink-0 rounded flex items-center justify-center cursor-pointer bg-zinc-100 text-zinc-400 hover:bg-emerald-100 hover:text-emerald-700 transition-colors"><svg class="w-3.5 h-3.5"><use href="#i-plus"/></svg></button>
+
+                                                        <!-- phones: row actions menu (everything but the checkmark) -->
+                                                        <!-- .stop is load-bearing: without it the menu's @click.outside
+                                                             (registered the microtask after this handler renders it) sees
+                                                             THIS click finish bubbling to document and closes the menu
+                                                             instantly. Only reproduces with real taps - a synthetic
+                                                             .click() keeps the stack busy so the menu renders too late
+                                                             to catch the event. -->
+                                                        <button type="button" @click.stop="toggleRowMenu(field, $event)" title="Row actions"
+                                                            class="sm:hidden max-sm:order-4 w-7 h-7 shrink-0 rounded flex items-center justify-center cursor-pointer bg-zinc-100 text-zinc-400 active:bg-zinc-200"><svg class="w-3.5 h-3.5"><use href="#i-kebab"/></svg></button>
+                                                        <template x-if="rowMenuFor === field.id">
+                                                            <div class="fixed z-50 w-56 bg-white border border-zinc-200 rounded-md shadow-lg py-1"
+                                                                :style="{ left: rowMenuPos.x + 'px', top: rowMenuPos.y + 'px' }"
+                                                                @click.outside="rowMenuFor = null">
+                                                                <template x-if="group.kind === 'envelope'">
+                                                                    <button type="button" :disabled="frozen" @click="rowMenuFor = null; toggleAutoEditor(field)"
+                                                                        class="w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 cursor-pointer text-zinc-600 hover:bg-zinc-50 disabled:opacity-40">
+                                                                        <svg class="w-3.5 h-3.5" :class="isAuto(field) && 'text-violet-600'"><use href="#i-percent"/></svg> Auto-fund…
+                                                                    </button>
+                                                                </template>
+                                                                <template x-if="group.kind === 'goal'">
+                                                                    <button type="button" :disabled="frozen" @click="rowMenuFor = null; toggleSchedEditor(field)"
+                                                                        class="w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 cursor-pointer text-zinc-600 hover:bg-zinc-50 disabled:opacity-40">
+                                                                        <svg class="w-3.5 h-3.5" :class="field.dueKey && 'text-violet-600'"><use href="#i-clock"/></svg> Schedule…
+                                                                    </button>
+                                                                </template>
+                                                                <button type="button" :disabled="offline" @click="rowMenuFor = null; toggleTagEditor(field)"
+                                                                    class="w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 cursor-pointer text-zinc-600 hover:bg-zinc-50 disabled:opacity-40">
+                                                                    <svg class="w-3.5 h-3.5" :class="field.tags && field.tags.length && 'text-emerald-600'"><use href="#i-tag"/></svg> Tags…
+                                                                </button>
+                                                                <button type="button" :disabled="frozen" @click="rowMenuFor = null; addField(group, fi)"
+                                                                    class="w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 cursor-pointer text-zinc-600 hover:bg-zinc-50 disabled:opacity-40">
+                                                                    <svg class="w-3.5 h-3.5"><use href="#i-plus"/></svg> Add a field below
+                                                                </button>
+                                                                <button type="button" :disabled="frozen" @click="rowMenuFor = null; removeField(group, field)"
+                                                                    class="w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 cursor-pointer text-red-600 hover:bg-red-50 disabled:opacity-40">
+                                                                    <svg class="w-3.5 h-3.5"><use href="#i-xmark"/></svg> Remove field
+                                                                </button>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+
+                                                    <!-- goal schedule editor (⧗ toggle) -->
+                                                    <div x-show="schedEditorFor === field.id" class="flex flex-wrap items-center gap-2 mt-1.5 pl-9 pr-20 text-[11px] text-zinc-400">
+                                                        <span class="select-none">due</span>
+                                                        <input type="month" x-model="field.dueKey" :disabled="frozen" title="When the full target is needed - the monthly deposit is derived from this."
+                                                            class="border border-zinc-200 rounded px-1.5 py-0.5 bg-white text-[11px] focus:outline-none focus:ring-1 focus:ring-violet-400">
+                                                        <span class="select-none">every</span>
+                                                        <input type="number" min="0" x-model.number="field.freqMonths" placeholder="12" :disabled="frozen"
+                                                            title="Months between due dates (12 = yearly). 0 or blank = one-time - the due date won’t advance."
+                                                            class="w-12 border border-zinc-200 rounded px-1.5 py-0.5 text-right bg-white text-[11px] focus:outline-none focus:ring-1 focus:ring-violet-400">
+                                                        <span class="select-none">months</span>
+                                                        <span x-show="isSched(group, field)" class="text-violet-600 font-semibold tabular-nums select-none"
+                                                            x-text="'= ' + fmt(field.value) + ' this month'"></span>
+                                                        <button type="button" x-show="field.dueKey" @click="clearSchedule(field)" :disabled="frozen"
+                                                            class="text-zinc-400 hover:text-red-600 cursor-pointer">clear</button>
+                                                        <template x-if="FinEngine.num(field.target) > 0">
+                                                            <div class="flex items-center gap-2 flex-1 min-w-40">
+                                                                <span class="text-[11px] whitespace-nowrap select-none"
+                                                                    :class="progress(field).reached ? 'text-amber-600 font-bold' : 'text-zinc-400'"
+                                                                    x-text="progress(field).reached
+                                                                        ? (contrib(group, field) > 0 ? '● funded' : '● at cap - contributing $0 until spent')
+                                                                        : progress(field).pct + '% of ' + fmt(field.target)
+                                                                            + (!field.dueKey && contrib(group, field) < rateOf(field) ? ' · +' + fmt(contrib(group, field)) + ' this month (capped)' : '')"></span>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+
+                                                    <!-- auto-fund editor -->
+                                                    <div x-show="autoEditorFor === field.id" class="flex flex-wrap items-center gap-2 mt-1.5 pl-9 text-xs text-zinc-500">
+                                                        <span class="select-none">auto-fund</span>
+                                                        <input type="number" min="0" max="100" step="0.01" :value="field.auto ? field.auto.pct : ''" @input="setAutoPct(field, $event.target.value)" :disabled="frozen"
+                                                            title="Decimals allowed - e.g. 33.33 for one third"
+                                                            class="w-16 border border-zinc-200 rounded px-1.5 py-0.5 text-right bg-white focus:outline-none focus:ring-1 focus:ring-violet-400">
+                                                        <span class="select-none">% of the net of</span>
+                                                        <template x-for="g in sourceGroups" :key="g.groupId">
+                                                            <label class="flex items-center gap-1 cursor-pointer bg-zinc-100 hover:bg-zinc-200 rounded-full px-2.5 py-1 select-none transition-colors">
+                                                                <input type="checkbox" class="accent-violet-600" :disabled="frozen"
+                                                                    :checked="field.auto && field.auto.groups.includes(g.groupId)"
+                                                                    @change="toggleAutoGroup(field, g.groupId)">
+                                                                <span x-text="g.title"></span>
+                                                            </label>
+                                                        </template>
+                                                        <span x-show="isAuto(field)" class="text-violet-600 font-semibold tabular-nums select-none"
+                                                            x-text="'= ' + fmt(rateOf(field)) + ' this month'"></span>
+                                                        <button type="button" x-show="field.auto" @click="clearAuto(field)" :disabled="frozen"
+                                                            class="text-zinc-400 hover:text-red-600 cursor-pointer">clear</button>
+                                                    </div>
+
+                                                    <!-- tag editor -->
+                                                    <div x-show="tagEditorFor === field.id" class="flex flex-wrap items-center gap-1.5 mt-1.5 pl-9">
+                                                        <template x-for="tag in field.tags" :key="tag">
+                                                            <span class="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 text-[11px] px-2 py-0.5 rounded-full">
+                                                                <span x-text="tag"></span>
+                                                                <button type="button" @click="removeTag(field, tag)" :disabled="offline" class="cursor-pointer hover:text-emerald-900 flex items-center"><svg class="w-2.5 h-2.5"><use href="#i-xmark"/></svg></button>
+                                                            </span>
+                                                        </template>
+                                                        <input type="text" x-model="newTag" placeholder="add tag ⏎" :disabled="offline"
+                                                            @keydown="tagKeydown(field, $event)"
+                                                            @focus="openTagSuggest($event)"
+                                                            @input="tagSuggestOpen || openTagSuggest($event)"
+                                                            @blur="tagSuggestOpen = false"
+                                                            class="w-28 border border-zinc-200 rounded-full px-2.5 py-0.5 text-[11px] bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400">
+                                                        <!-- suggestion dropdown: x-if (not x-show - a string :style
+                                                             would clobber x-show's display:none, and 100+ hidden
+                                                             copies would render buttons); fixed-positioned because
+                                                             the group card clips overflow; mousedown.prevent keeps
+                                                             the input focused so blur doesn't eat the click -->
+                                                        <template x-if="tagSuggestOpen && tagEditorFor === field.id && tagSuggestions(field).length > 0">
+                                                            <div class="tag-suggest fixed z-50 w-44 bg-white border border-zinc-200 rounded-md shadow-lg overflow-hidden"
+                                                                :style="{ left: tagSuggestPos.x + 'px', top: tagSuggestPos.y + 'px' }">
+                                                                <template x-for="(t, ti) in tagSuggestions(field)" :key="t">
+                                                                    <button type="button" @mousedown.prevent="pickTag(field, t)"
+                                                                        class="w-full text-left px-2.5 py-1.5 text-[11px] cursor-pointer flex items-center gap-1.5"
+                                                                        :class="ti === tagSuggestIndex ? 'bg-emerald-100 text-emerald-800' : 'text-zinc-600 hover:bg-zinc-50'">
+                                                                        <svg class="w-2.5 h-2.5 shrink-0 text-emerald-500"><use href="#i-tag"/></svg>
+                                                                        <span x-text="t"></span>
+                                                                    </button>
+                                                                </template>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </div>
+                                            </template>
+
+                                            <div x-show="!group.fields.length" class="text-center py-2">
+                                                <button type="button" @click="addField(group)" :disabled="frozen"
+                                                    class="text-sm text-zinc-400 hover:text-emerald-600 cursor-pointer border border-dashed border-zinc-300 hover:border-emerald-400 rounded-md px-4 py-2 transition-colors inline-flex items-center gap-1.5"><svg class="w-3 h-3"><use href="#i-plus"/></svg>add the first field</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
+                            </template>
+                        </fieldset>
+
+                        <!-- =============================== sidebar
+                             `contents` below xl dissolves the aside so its panels
+                             interleave with the groups by `order`: This Month +
+                             action buttons first, groups second, savings last -->
+                        <aside class="contents xl:block xl:w-96 xl:shrink-0 xl:space-y-5 xl:sticky xl:top-20">
+                            <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-4 w-full hidden sm:block xl:w-auto order-3 xl:order-none">
+                                <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-1 select-none">Savings</h3>
+                                <!-- phones see charts in Insights; the monthly sparkline is desktop-only -->
+                                <div x-ref="savingsChart" class="-mx-2"></div>
+                                <div class="text-4xl font-black font-brand text-center text-zinc-800" x-text="fmt(currentSavings)"></div>
+                                <div class="text-center text-xs text-zinc-400 mb-3" x-text="fmt(withBudgets) + ' incl. unspent envelopes'"></div>
+                                <div class="flex items-center justify-between border-t border-zinc-100 pt-3">
+                                    <span class="text-xs text-zinc-500 select-none">Savings at month start</span>
+                                    <span class="text-sm font-semibold tabular-nums text-zinc-700 select-none"
+                                        title="Derived from the previous month’s close-out. The very first month starts from “Initial savings” in Settings."
+                                        x-text="fmt(month.startingSavings)"></span>
+                                </div>
+                            </section>
+
+                            <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-4 w-full xl:w-auto order-1 xl:order-none">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 select-none">This Month</h3>
+                                    <span class="sm:hidden text-[10px] uppercase tracking-widest font-bold px-2.5 py-1 rounded-full select-none"
+                                        :class="isClosed ? (unlocked ? 'bg-amber-100 text-amber-700' : 'bg-zinc-200 text-zinc-500') : 'bg-emerald-100 text-emerald-700'"
+                                        x-text="isClosed ? (unlocked ? 'closed · editing' : 'closed') : 'open'"></span>
+                                </div>
+                                <div class="text-4xl font-black font-brand text-center" :class="net >= 0 ? 'text-emerald-600' : 'text-red-600'" x-text="fmtSigned(net)"></div>
+                            </section>
+
+                            <div class="space-y-2 w-full xl:w-auto order-1 xl:order-none">
+                                <template x-if="!isClosed">
+                                    <div class="space-y-2">
+                                        <button type="button" @click="save()" :disabled="offline" title="Save (Ctrl+S) · Undo (Ctrl+Z) · Redo (Ctrl+Y)"
+                                            class="w-full bg-emerald-600 hover:bg-emerald-500 border border-emerald-600 hover:border-emerald-500 text-white font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors disabled:bg-zinc-200 disabled:text-zinc-400"
+                                            x-text="isDirty ? 'Update This Month ●' : 'Update This Month'"></button>
+                                        <button type="button" x-show="isLatest" @click="closeOut()" :disabled="offline"
+                                            class="w-full bg-white border border-zinc-300 hover:border-emerald-500 hover:text-emerald-700 text-zinc-600 font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors disabled:text-zinc-300 disabled:border-zinc-200">Close Out This Month</button>
+                                    </div>
+                                </template>
+                                <template x-if="readonly">
+                                    <div class="bg-zinc-100 border border-zinc-200 rounded-md p-4 text-center">
+                                        <p class="text-sm text-zinc-500 mb-3">This month is closed. Editing it will recompute every later month.</p>
+                                        <button type="button" @click="unlock()" :disabled="offline"
+                                            class="bg-white border border-zinc-300 hover:border-amber-500 hover:text-amber-700 text-zinc-600 font-bold uppercase tracking-widest text-xs rounded-md px-4 py-2.5 cursor-pointer transition-colors disabled:text-zinc-300">Edit this month</button>
+                                    </div>
+                                </template>
+                                <template x-if="isClosed && unlocked">
+                                    <div class="space-y-2">
+                                        <button type="button" @click="save()" :disabled="offline"
+                                            class="w-full bg-amber-500 hover:bg-amber-400 border border-amber-500 hover:border-amber-400 text-white font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors disabled:bg-zinc-200 disabled:text-zinc-400">Save &amp; Recompute Forward</button>
+                                        <button type="button" @click="cancelEditing()"
+                                            class="w-full bg-white border border-zinc-300 hover:border-zinc-500 hover:text-zinc-700 text-zinc-600 font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors disabled:text-zinc-300 disabled:border-zinc-200">Cancel editing</button>
+                                    </div>
+                                </template>
+                                <div class="mt-4 uppercase font-bold text-xs tracking-widest text-zinc-400 flex justify-between opacity-60"><span>Save <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+S</kbd></span><span>Undo <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+Z</kbd></span><span>Redo <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+Shift+Z</kbd></span></div>
+                            </div>
+                        </aside>
+                    </div>
+
+                </div>
+            </template>
+        </div>
+
+        <!-- ========================================= insights view -->
+        <div x-data="insightsView()" x-show="$store.ui.view === 'insights'"
+            x-effect="if ($store.ui.view === 'insights' && $store.data.db) { range; $store.data.db.meta.rev; $nextTick(() => render()); } else { Charts.teardownInsights(); }">
+            <!-- x-if (not x-show): the aggregation bindings below deeply track
+                 every month in range - alive-but-hidden they made every edit
+                 in the Month view pay their re-run cost -->
+            <template x-if="$store.ui.view === 'insights' && $store.data.db">
+            <div>
+
+            <div class="flex items-center gap-2 mb-6">
+                <h2 class="text-lg font-black font-brand text-zinc-700 mr-4 select-none">Insights</h2>
+                <template x-for="r in [['12mo','Last 12 months'],['ytd','This year'],['all','All time']]" :key="r[0]">
+                    <button type="button" @click="range = r[0]" x-text="r[1]"
+                        class="px-3 py-1.5 rounded-md text-sm font-semibold cursor-pointer transition-colors"
+                        :class="range === r[0] ? 'bg-emerald-600 text-white' : 'bg-white border border-zinc-200 text-zinc-500 hover:bg-zinc-100'"></button>
+                </template>
+            </div>
+
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <template x-for="card in [['Avg monthly income', stats().avgIncome, 'text-emerald-600'], ['Avg monthly spend', stats().avgSpend, 'text-red-500'], ['Avg monthly net', stats().avgNet, stats().avgNet >= 0 ? 'text-emerald-600' : 'text-red-500'], ['Months in range', stats().months, 'text-zinc-700']]">
+                    <div class="bg-white rounded-lg border border-zinc-200 shadow-sm p-4">
+                        <div class="text-[11px] uppercase tracking-widest font-bold text-zinc-400 select-none" x-text="card[0]"></div>
+                        <div class="text-2xl font-black font-brand mt-1" :class="card[2]" x-text="card[0] === 'Months in range' ? card[1] : fmt(card[1])"></div>
+                    </div>
+                </template>
+            </div>
+
+            <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-4 mb-6">
+                <div class="flex items-baseline justify-between mb-3">
+                    <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 select-none">Savings over time &amp; projection</h3>
+                    <span x-show="projected12 !== null" class="text-xs font-semibold text-violet-600 select-none"
+                        title="Linear trend of the selected timespan, projected forward"
+                        x-text="'≈ ' + fmt(projected12) + ' in 12 months at the current trend'"></span>
+                </div>
+                <div id="insights-chart-savings"></div>
+            </section>
+
+            <div class="grid lg:grid-cols-2 gap-6 mb-6">
+                <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-4">
+                    <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-3 select-none">Spend by tag</h3>
+                    <!-- charts mount by id, not x-ref: $refs go stale across x-if re-creation -->
+                    <div id="insights-chart-donut"></div>
+                    <p x-show="!tagRows().length" class="text-center text-zinc-400 text-sm py-10">
+                        No spending in this range yet. Tag fields with the <span class="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded inline-flex items-center align-middle"><svg class="w-3 h-3"><use href="#i-tag"/></svg></span> button -
+                        tagging a budget also covers the expenses that draw from it.
+                    </p>
+                </section>
+                <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-4">
+                    <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-3 select-none">Monthly spend, top tags</h3>
+                    <div id="insights-chart-bar"></div>
+                </section>
+            </div>
+
+            <!-- income streams: only rendered content when tagged income
+                 exists in range - untagged income gets no insights -->
+            <div id="insights-income-block" x-show="incomeRows().length" class="grid lg:grid-cols-2 gap-6 mb-6">
+                <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-4">
+                    <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-3 select-none">Income by tag</h3>
+                    <div id="insights-chart-income-donut"></div>
+                    <table class="w-full text-sm mt-3">
+                        <thead>
+                            <tr class="text-left text-[11px] uppercase tracking-widest text-zinc-400 select-none">
+                                <th class="pb-2 font-bold">Tag</th>
+                                <th class="pb-2 font-bold text-right">Total</th>
+                                <th class="pb-2 font-bold text-right">Monthly avg</th>
+                                <th class="pb-2 font-bold text-right">% of tagged</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="row in incomeRows()" :key="row.tag">
+                                <tr class="border-t border-zinc-100">
+                                    <td class="py-1.5"><span class="bg-emerald-100 text-emerald-700 text-[11px] px-2 py-0.5 rounded-full" x-text="row.tag"></span></td>
+                                    <td class="py-1.5 text-right font-semibold" x-text="fmt(row.total)"></td>
+                                    <td class="py-1.5 text-right text-zinc-500" x-text="fmt(row.avg)"></td>
+                                    <td class="py-1.5 text-right text-zinc-400" x-text="row.pct + '%'"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </section>
+                <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-4">
+                    <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-3 select-none">Income streams over time</h3>
+                    <div id="insights-chart-income-bar"></div>
+                </section>
+            </div>
+
+            <div class="grid lg:grid-cols-2 gap-6">
+                <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-4">
+                    <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-3 select-none">Tag breakdown</h3>
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-left text-[11px] uppercase tracking-widest text-zinc-400 select-none">
+                                <th class="pb-2 font-bold">Tag</th>
+                                <th class="pb-2 font-bold text-right">Total</th>
+                                <th class="pb-2 font-bold text-right">Monthly avg</th>
+                                <th class="pb-2 font-bold text-right">% of spend</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="row in tagRows()" :key="row.tag">
+                                <tr class="border-t border-zinc-100">
+                                    <td class="py-1.5"><span class="bg-emerald-100 text-emerald-700 text-[11px] px-2 py-0.5 rounded-full" x-text="row.tag"></span></td>
+                                    <td class="py-1.5 text-right font-semibold" x-text="fmt(row.total)"></td>
+                                    <td class="py-1.5 text-right text-zinc-500" x-text="fmt(row.avg)"></td>
+                                    <td class="py-1.5 text-right text-zinc-400" x-text="row.pct + '%'"></td>
+                                </tr>
+                            </template>
+                            <tr x-show="!tagRows().length"><td colspan="4" class="py-4 text-center text-zinc-400 text-sm">No tagged spending yet - tag expenses with the # button in the Month view.</td></tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-4">
+                    <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-3 select-none">Envelope health (latest month)</h3>
+                    <div class="space-y-3">
+                        <template x-for="env in envelopes()" :key="env.label + env.kind">
+                            <div>
+                                <div class="flex justify-between text-sm mb-1">
+                                    <span class="font-semibold text-zinc-700" x-text="env.label"></span>
+                                    <span :class="env.left < 0 ? 'text-red-600 font-bold' : 'text-zinc-500'"
+                                        x-text="fmt(env.spent) + ' spent of ' + fmt(env.avail)"></span>
+                                </div>
+                                <div class="w-full bg-zinc-100 rounded-full h-2 overflow-hidden">
+                                    <div class="h-full rounded-full" :class="env.left < 0 ? 'bg-red-500' : (env.progress && env.progress.reached ? 'bg-amber-400' : 'bg-emerald-500')"
+                                        :style="'width:' + Math.min(100, env.avail > 0 ? Math.round(env.spent / env.avail * 100) : (env.spent > 0 ? 100 : 0)) + '%'"></div>
+                                </div>
+                            </div>
+                        </template>
+                        <p x-show="!envelopes().length" class="text-center text-zinc-400 text-sm py-4">No envelopes in the latest month.</p>
+                    </div>
+                </section>
+            </div>
+
+            </div>
+            </template>
+        </div>
+
+        <!-- ========================================= settings view -->
+        <div x-data="settingsView(true)" x-show="$store.ui.view === 'settings'" @keydown.window="hotkeys($event)">
+            <template x-if="$store.ui.view === 'settings'">
+                <div>
+                    <h2 class="text-lg font-black font-brand text-zinc-700 mb-6 select-none">Settings</h2>
+
+                    <div class="grid lg:grid-cols-2 gap-6 items-start">
+                        <!-- groups -->
+                        <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-5">
+                            <template x-if="draft">
+                                <div class="flex items-center justify-between gap-4 mb-5 pb-5 border-b border-zinc-100">
+                                    <div>
+                                        <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 select-none">Initial savings</h3>
+                                        <p class="text-[11px] text-zinc-400 mt-0.5">What you had before your very first month. Changing it recomputes every month’s savings (a backup is taken first).</p>
+                                    </div>
+                                    <template x-if="!initialLocked">
+                                        <div class="relative shrink-0">
+                                            <span class="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 text-xs select-none">$</span>
+                                            <input type="number" x-model.number="draft.initialSavings"
+                                                class="w-32 border border-zinc-200 rounded pl-5 pr-1 py-1.5 text-sm text-right bg-zinc-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                                :class="initialUnlocked && 'ring-1 ring-amber-400'">
+                                        </div>
+                                    </template>
+                                    <template x-if="initialLocked">
+                                        <div class="flex items-center gap-2 shrink-0">
+                                            <span class="text-sm font-semibold tabular-nums text-zinc-700 select-none"
+                                                title="Locked once you have more than one month of history" x-text="fmt(draft.initialSavings)"></span>
+                                            <button type="button" @click="unlockInitial()"
+                                                class="text-xs border border-zinc-300 rounded px-2.5 py-1 text-zinc-500 hover:border-amber-500 hover:text-amber-700 cursor-pointer transition-colors">edit…</button>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+
+                            <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-1 select-none">Field groups</h3>
+                            <p class="text-xs text-zinc-400 mb-4">Shape the app to your life - add groups like “Self-Employment Income” or “Rental Expenses”. Changes apply to open and future months; closed months keep their history.</p>
+
+                            <template x-if="draft">
+                                <div>
+                                    <template x-for="(group, gi) in draft.groups" :key="group.id">
+                                        <div class="border border-zinc-200 rounded-md p-3 mb-2.5 bg-zinc-50">
+                                            <div class="flex items-center gap-2">
+                                                <div class="flex flex-col shrink-0">
+                                                    <button type="button" @click="move(gi, -1)" class="text-zinc-300 hover:text-zinc-600 cursor-pointer leading-none text-xs" :class="gi === 0 && 'opacity-0 pointer-events-none'">▲</button>
+                                                    <button type="button" @click="move(gi, 1)" class="text-zinc-300 hover:text-zinc-600 cursor-pointer leading-none text-xs" :class="gi === draft.groups.length - 1 && 'opacity-0 pointer-events-none'">▼</button>
+                                                </div>
+                                                <input type="text" x-model="group.title"
+                                                    class="flex-1 min-w-0 border border-zinc-200 rounded px-2.5 py-1.5 text-sm font-semibold bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                                <span class="text-xs text-zinc-400 shrink-0 select-none" x-text="kindLabel(group.kind)"></span>
+                                                <button type="button" @click="removeGroup(group)" title="Remove group"
+                                                    class="w-7 h-7 shrink-0 rounded flex items-center justify-center cursor-pointer bg-white border border-zinc-200 text-zinc-400 hover:bg-red-100 hover:text-red-600 transition-colors"><svg class="w-3.5 h-3.5"><use href="#i-xmark"/></svg></button>
+                                            </div>
+                                            <label x-show="group.kind === 'envelope'" class="flex items-center gap-2 mt-2.5 ml-6 cursor-pointer select-none">
+                                                <input type="checkbox" x-model="group.strictOverspend" class="accent-emerald-600">
+                                                <span class="text-xs text-zinc-500">Strict overspend - going over an envelope also reduces next month’s available envelope balance by the difference (pocket the savings)</span>
+                                            </label>
+                                        </div>
+                                    </template>
+
+                                    <div class="flex flex-wrap gap-2 mt-4">
+                                        <template x-for="k in [['income','+ Income'],['envelope','+ Envelope budgets'],['goal','+ Goal budgets'],['expense','+ Expenses']]" :key="k[0]">
+                                            <button type="button" @click="addGroup(k[0])" x-text="k[1]"
+                                                class="text-xs border border-dashed border-zinc-300 hover:border-emerald-400 hover:text-emerald-700 text-zinc-500 rounded-md px-3 py-1.5 cursor-pointer transition-colors"></button>
+                                        </template>
+                                    </div>
+
+                                    <div class="mt-5 flex items-center gap-3">
+                                        <button type="button" @click="save()" :disabled="!dirty || $store.ui.offline"
+                                            class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold uppercase tracking-widest text-xs rounded-md px-5 py-2.5 cursor-pointer transition-colors disabled:bg-zinc-200 disabled:text-zinc-400 disabled:cursor-default">Save settings</button>
+                                        <button type="button" x-show="dirty" @click="reset()"
+                                            class="text-xs text-zinc-400 hover:text-zinc-600 cursor-pointer">discard changes</button>
+                                    </div>
+                                </div>
+                            </template>
+                        </section>
+
+                        <!-- right column: access + data, wrapped as one grid child so
+                             Data always stays on the right and never wraps under the
+                             field groups when the (desktop-only) access pane shows.
+                             flex gap (not space-y) so the gap collapses when the access
+                             pane is display:none in web mode. -->
+                        <div class="flex flex-col gap-6">
+                            <!-- data management -->
+                            <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-5">
+                                <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-4 select-none">Data</h3>
+
+                                <div class="text-xs text-zinc-500 mb-4 break-all">
+                                    <span class="font-bold text-zinc-400 uppercase tracking-widest text-[10px] block mb-1 select-none">Database file</span>
+                                    <!-- worth copying, so it opts out of the app-wide select-none -->
+                                    <span class="select-text" x-text="dbPath"></span>
+                                </div>
+
+                                <div class="flex flex-wrap gap-2">
+                                    <button type="button" @click="changeLocation()" class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors">Move / share database…</button>
+                                    <button type="button" @click="exportDb()" class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors">Export a copy…</button>
+                                    <button type="button" @click="loadBackups()" class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors">Backups…</button>
+                                    <button type="button" @click="importLegacy()" class="text-xs border border-amber-300 text-amber-700 hover:bg-amber-50 rounded-md px-3 py-2 cursor-pointer transition-colors">Import legacy data…</button>
+                                </div>
+
+                                <p class="text-[11px] text-zinc-400 mt-4 leading-relaxed">
+                                    Your data is one JSON file. Point it at a synced folder (Dropbox, OneDrive, etc.) to use the same
+                                    books on several machines - the app detects when another session saved first and refuses to
+                                    overwrite it. Automatic backups are taken before every close-out, recompute, restore, and import.
+                                </p>
+
+                                <!-- updates -->
+                                <div class="mt-4 pt-4 border-t border-zinc-100">
+                                    <span class="font-bold text-zinc-400 uppercase tracking-widest text-[10px] block mb-2 select-none">Updates</span>
+
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <label class="flex items-center gap-2 text-xs text-zinc-600 cursor-pointer select-none">
+                                            <input type="checkbox" :checked="updateCheckEnabled()" @change="setUpdateCheck($event.target.checked)"
+                                                class="accent-emerald-600 cursor-pointer">
+                                            Check GitHub for new releases
+                                        </label>
+                                        <button type="button" @click="checkNow()" x-show="updateCheckEnabled()"
+                                            :disabled="$store.data.update.checking"
+                                            class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-1.5 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-default"
+                                            x-text="$store.data.update.checking ? 'Checking…' : 'Check now'"></button>
+                                    </div>
+
+                                    <!-- an update exists -->
+                                    <div x-show="$store.data.update.available" class="mt-3 flex flex-wrap items-center gap-2 rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2">
+                                        <span class="text-xs text-emerald-800 select-none">
+                                            Version <span class="font-semibold" x-text="$store.data.update.latest"></span> is available.
+                                        </span>
+                                        <button type="button" @click="openReleases()"
+                                            class="text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded px-2.5 py-1 cursor-pointer transition-colors">Release notes</button>
+                                    </div>
+
+                                    <!-- up to date / offline / off: quiet one-liners -->
+                                    <p x-show="updateCheckEnabled() && $store.data.update.checked && !$store.data.update.available && !$store.data.update.unreachable"
+                                        class="text-[11px] text-zinc-400 mt-2 select-none">You're on the latest release.</p>
+                                    <p x-show="updateCheckEnabled() && $store.data.update.checked && $store.data.update.unreachable"
+                                        class="text-[11px] text-zinc-400 mt-2 select-none">Couldn't reach GitHub - no matter, nothing else needs it.</p>
+                                    <p x-show="!updateCheckEnabled()" class="text-[11px] text-zinc-400 mt-2 leading-relaxed">
+                                        Update checks are off.
+                                    </p>
+                                </div>
+
+                                <div class="text-[11px] text-zinc-400 mt-4 pt-4 border-t border-zinc-100 select-none"
+                                    title="Application version - if this is older than your latest install, the window is running stale code">
+                                    Spend Wise · v<span class="font-semibold" x-text="$store.data.version || 'dev'"></span> · by Michael Niles
+                                </div>
+                            </section>
+
+                            <!-- privacy & access -->
+                            <section x-show="!isWeb" class="bg-white rounded-lg border border-zinc-200 shadow-sm p-5">
+                                <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-1 select-none">App password</h3>
+                                <p class="text-xs text-zinc-400 mb-4 leading-relaxed">
+                                    Locks the app on launch - casual privacy on a shared computer - and is the login for web
+                                    access.
+                                </p>
+
+                                <div class="flex flex-wrap items-end gap-2">
+                                    <label x-show="hasPassword" class="block">
+                                        <span class="text-[10px] uppercase tracking-widest font-bold text-zinc-400 block mb-1 select-none">Current</span>
+                                        <input type="password" x-model="pwCurrent" autocomplete="current-password"
+                                            class="w-36 border border-zinc-200 rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                    </label>
+                                    <label class="block">
+                                        <span class="text-[10px] uppercase tracking-widest font-bold text-zinc-400 block mb-1 select-none" x-text="hasPassword ? 'New' : 'Password'"></span>
+                                        <input type="password" x-model="pwNew" autocomplete="new-password"
+                                            class="w-36 border border-zinc-200 rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                    </label>
+                                    <label class="block">
+                                        <span class="text-[10px] uppercase tracking-widest font-bold text-zinc-400 block mb-1 select-none">Confirm</span>
+                                        <input type="password" x-model="pwConfirm" autocomplete="new-password" @keydown.enter="setPassword()"
+                                            class="w-36 border border-zinc-200 rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                    </label>
+                                    <button type="button" @click="setPassword()"
+                                        class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors"
+                                        x-text="hasPassword ? 'Change password' : 'Set password'"></button>
+                                    <button type="button" x-show="hasPassword" @click="removePassword()"
+                                        class="text-xs border border-red-200 text-red-600 hover:bg-red-50 rounded-md px-3 py-2 cursor-pointer transition-colors">Remove…</button>
+                                </div>
+
+                                <template x-if="web.loaded">
+                                    <div class="mt-5 pt-5 border-t border-zinc-100">
+                                        <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-1 select-none">Web access</h3>
+                                        <p class="text-xs text-zinc-400 mb-4 leading-relaxed">
+                                            Serves this same app to browsers on your network - phones, laptops, family members -
+                                            editing the very same data live (edits merge automatically). Requires the app password;
+                                            every browser signs in with it. For access away from home, put the machine on a
+                                            private network like Tailscale rather than exposing the port to the internet.
+                                        </p>
+                                        <div class="flex flex-wrap items-center gap-3">
+                                            <button type="button" @click="toggleWeb()"
+                                                class="text-xs font-bold rounded-md px-4 py-2 cursor-pointer transition-colors"
+                                                :class="web.enabled ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'border border-zinc-300 hover:bg-zinc-100 text-zinc-600'"
+                                                x-text="web.enabled ? 'Web access: on' : 'Turn on web access'"></button>
+                                            <label class="flex items-center gap-1.5 text-xs text-zinc-500">
+                                                port
+                                                <input type="number" min="1024" max="65535" x-model.number="web.port" @change="applyWebPort()"
+                                                    class="w-20 border border-zinc-200 rounded px-2 py-1.5 text-sm text-right bg-zinc-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                            </label>
+                                            <span x-show="web.enabled && web.running" class="text-[10px] uppercase tracking-widest font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 select-none">serving</span>
+                                        </div>
+                                        <div x-show="web.running" class="mt-3 text-xs text-zinc-500 space-y-0.5">
+                                            <template x-for="url in web.urls" :key="url">
+                                                <div class="font-mono select-text" x-text="url"></div>
+                                            </template>
+                                        </div>
+
+                                        <details class="mt-4 group">
+                                            <summary class="text-xs text-zinc-500 cursor-pointer select-none hover:text-zinc-700 marker:text-zinc-300">Behind a reverse proxy?</summary>
+                                            <div class="mt-3 pl-1 space-y-3 border-l-2 border-zinc-100">
+                                                <p class="text-xs text-zinc-400 leading-relaxed pl-3">
+                                                    Only needed if a proxy (nginx, Caddy, Apache, Cloudflare Tunnel) sits in front of
+                                                    this app. Leave the hop count at 0 for direct LAN or Tailscale access - setting it
+                                                    higher than the proxies you actually run lets a client forge its IP and dodge the
+                                                    login lockout.
+                                                </p>
+                                                <label class="flex items-center gap-1.5 text-xs text-zinc-500 pl-3">
+                                                    trusted proxies in front
+                                                    <input type="number" min="0" max="10" x-model.number="web.trustProxy" @change="applyWebProxy()"
+                                                        class="w-16 border border-zinc-200 rounded px-2 py-1.5 text-sm text-right bg-zinc-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                                </label>
+                                                <label class="flex items-center gap-2 text-xs text-zinc-500 pl-3 cursor-pointer">
+                                                    <input type="checkbox" x-model="web.secureCookie" @change="applyWebProxy()"
+                                                        class="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500">
+                                                    force Secure cookies (auto-detected from the proxy when hops &gt; 0)
+                                                </label>
+                                            </div>
+                                        </details>
+                                    </div>
+                                </template>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- =========================================== modals -->
+
+        <!-- recompute summary -->
+        <x-modal toggle="recompute" wide="true">
+            <h2 class="text-lg font-black font-brand text-zinc-800 mb-1">Recomputed forward</h2>
+            <p class="text-sm text-zinc-500 mb-4">Your edit changed the derived numbers of these months. Everything you typed by hand was left alone.</p>
+            <div class="max-h-96 overflow-y-auto pr-1">
+                <template x-for="ch in $store.ui.recomputeChanges" :key="ch.key">
+                    <div class="border-t border-zinc-100 py-2.5">
+                        <div class="font-bold text-sm text-zinc-700" x-text="ch.label"></div>
+                        <div x-show="ch.startingSavings" class="text-xs text-zinc-500 mt-1">
+                            Starting savings:
+                            <span class="line-through text-zinc-400" x-text="ch.startingSavings && fmt(ch.startingSavings.from)"></span> →
+                            <span class="font-semibold text-zinc-700" x-text="ch.startingSavings && fmt(ch.startingSavings.to)"></span>
+                        </div>
+                        <template x-for="env in ch.envelopes" :key="env.id">
+                            <div class="text-xs text-zinc-500 mt-1">
+                                <span x-text="env.label || 'envelope'"></span> balance:
+                                <span class="line-through text-zinc-400" x-text="fmt(env.from)"></span> →
+                                <span class="font-semibold text-zinc-700" x-text="fmt(env.to)"></span>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+            <div class="mt-5 text-right">
+                <button type="button" @click="$store.ui.modals.recompute = false"
+                    class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold uppercase tracking-widest text-xs rounded-md px-5 py-2.5 cursor-pointer transition-colors">Got it</button>
+            </div>
+        </x-modal>
+
+        <!-- import: map group kinds before running -->
+        <x-modal toggle="importMap">
+            <div x-data="settingsView()">
+                <h2 class="text-lg font-black font-brand text-zinc-800 mb-1">Map your groups</h2>
+                <p class="text-sm text-zinc-500 mb-4">These groups were found in your legacy data. Choose how each should behave going forward - historical months keep their numbers either way.</p>
+                <div class="space-y-2">
+                    <template x-for="g in $store.ui.importMap.groups" :key="g.title">
+                        <div class="flex items-center justify-between gap-3 border border-zinc-200 rounded-md px-3 py-2 bg-zinc-50">
+                            <span class="text-sm font-semibold text-zinc-700 truncate" x-text="g.title"></span>
+                            <select x-model="g.kind"
+                                class="shrink-0 text-xs border border-zinc-200 rounded py-1.5 px-1 bg-white cursor-pointer focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                <option value="income">Income (+)</option>
+                                <option value="expense">Expenses (−)</option>
+                                <option value="envelope">Envelope budgets (−)</option>
+                                <option value="goal">Goal budgets (−)</option>
+                            </select>
+                        </div>
+                    </template>
+                </div>
+                <div class="mt-6 flex justify-end gap-2">
+                    <button type="button" @click="$store.ui.modals.importMap = false"
+                        class="bg-zinc-100 hover:bg-zinc-200 text-zinc-600 font-bold uppercase tracking-widest text-xs rounded-md px-4 py-2.5 cursor-pointer transition-colors">Cancel</button>
+                    <button type="button" @click="runImport()"
+                        class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold uppercase tracking-widest text-xs rounded-md px-4 py-2.5 cursor-pointer transition-colors">Import</button>
+                </div>
+            </div>
+        </x-modal>
+
+        <!-- import summary -->
+        <x-modal toggle="importSummary">
+            <h2 class="text-lg font-black font-brand text-zinc-800 mb-1">Legacy data imported</h2>
+            <template x-if="$store.ui.importSummary">
+                <div class="text-sm text-zinc-600 space-y-2 mt-3">
+                    <p><span class="font-bold" x-text="$store.ui.importSummary.months"></span> months imported,
+                        <span x-text="FinEngine.keyLabel($store.ui.importSummary.firstMonth)"></span> through
+                        <span x-text="FinEngine.keyLabel($store.ui.importSummary.lastMonth)"></span>.</p>
+                    <p>Groups: <span x-text="$store.ui.importSummary.groups.join(', ')"></span></p>
+                    <p x-show="$store.ui.importSummary.warnings.length" class="text-amber-600 text-xs"
+                        x-text="$store.ui.importSummary.warnings.join('; ')"></p>
+                </div>
+            </template>
+            <div class="mt-5 text-right">
+                <button type="button" @click="$store.ui.modals.importSummary = false"
+                    class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold uppercase tracking-widest text-xs rounded-md px-5 py-2.5 cursor-pointer transition-colors">Nice</button>
+            </div>
+        </x-modal>
+
+        <!-- backups -->
+        <x-modal toggle="backups">
+            <div x-data="settingsView()">
+                <h2 class="text-lg font-black font-brand text-zinc-800 mb-1">Backups</h2>
+                <p class="text-sm text-zinc-500 mb-4">Automatic snapshots taken before risky operations. The 20 most recent are kept.</p>
+                <div class="max-h-80 overflow-y-auto pr-1" x-init="$watch('$store.ui.modals.backups', async (open) => { if (open) { const res = await window.api.listBackups(); if (res.ok) backups = res.backups; } })">
+                    <template x-for="b in backups" :key="b.name">
+                        <div class="flex items-center justify-between border-t border-zinc-100 py-2 gap-3">
+                            <div class="min-w-0">
+                                <div class="text-xs font-semibold text-zinc-700 truncate" x-text="b.name"></div>
+                                <div class="text-[11px] text-zinc-400" x-text="new Date(b.mtime).toLocaleString() + ' · ' + Math.round(b.size / 1024) + ' KB'"></div>
+                            </div>
+                            <button type="button" @click="restoreBackup(b)"
+                                class="text-[11px] shrink-0 border border-zinc-300 hover:border-amber-500 hover:text-amber-700 text-zinc-500 rounded px-2.5 py-1.5 cursor-pointer transition-colors">Restore</button>
+                        </div>
+                    </template>
+                    <p x-show="!backups.length" class="text-center text-zinc-400 text-sm py-6">No backups yet.</p>
+                </div>
+                <div class="mt-4 flex justify-between">
+                    <button type="button" @click="openBackupsFolder()" class="text-xs text-zinc-400 hover:text-zinc-600 cursor-pointer">open folder</button>
+                    <button type="button" @click="$store.ui.modals.backups = false"
+                        class="bg-zinc-200 hover:bg-zinc-300 text-zinc-600 font-bold uppercase tracking-widest text-xs rounded-md px-5 py-2.5 cursor-pointer transition-colors">Close</button>
+                </div>
+            </div>
+        </x-modal>
+
+        <!-- confirm (top-most) -->
+        <div x-show="$store.ui.confirm.open" x-transition.opacity.duration.150ms
+            class="fixed inset-0 z-50 flex items-center justify-center"
+            @keydown.escape.window="$store.ui.confirm.resolve && $store.ui.confirm.resolve(false)">
+            <div class="absolute inset-0 bg-zinc-900/50 backdrop-blur-[2px] cursor-pointer"
+                @click="$store.ui.confirm.resolve && $store.ui.confirm.resolve(false)"></div>
+            <div class="relative bg-white rounded-xl shadow-2xl p-7 mx-4 w-full max-w-lg">
+                <h2 class="text-base font-black font-brand text-zinc-800 mb-2" x-text="$store.ui.confirm.title"></h2>
+                <p class="text-sm text-zinc-500 leading-relaxed" x-text="$store.ui.confirm.body"></p>
+                <div class="mt-6 flex justify-end gap-2 flex-wrap">
+                    <button type="button" @click="$store.ui.confirm.resolve && $store.ui.confirm.resolve(false)"
+                        class="bg-zinc-100 hover:bg-zinc-200 text-zinc-600 font-bold uppercase tracking-widest text-xs rounded-md px-4 py-2.5 cursor-pointer transition-colors"
+                        x-text="$store.ui.confirm.cancelText"></button>
+                    <button type="button" x-show="$store.ui.confirm.altText"
+                        @click="$store.ui.confirm.resolve && $store.ui.confirm.resolve('alt')"
+                        class="bg-red-600 hover:bg-red-500 text-white font-bold uppercase tracking-widest text-xs rounded-md px-4 py-2.5 cursor-pointer transition-colors"
+                        x-text="$store.ui.confirm.altText"></button>
+                    <button type="button" @click="$store.ui.confirm.resolve && $store.ui.confirm.resolve(true)"
+                        class="text-white font-bold uppercase tracking-widest text-xs rounded-md px-4 py-2.5 cursor-pointer transition-colors"
+                        :class="$store.ui.confirm.danger && !$store.ui.confirm.altText ? 'bg-red-600 hover:bg-red-500' : 'bg-emerald-600 hover:bg-emerald-500'"
+                        x-text="$store.ui.confirm.confirmText"></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- toast -->
+        <div x-show="$store.ui.toast.show" @click="$store.ui.toast.show = false"
+            x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-3" x-transition:enter-end="opacity-100 translate-y-0"
+            x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
+            class="fixed bottom-7 left-1/2 -translate-x-1/2 z-[60] bg-white rounded-lg shadow-xl border border-zinc-200 flex items-stretch overflow-hidden cursor-pointer max-w-md w-full mx-4">
+            <div class="w-1.5 shrink-0"
+                :class="{ 'bg-sky-500': $store.ui.toast.type === 'info', 'bg-emerald-500': $store.ui.toast.type === 'success', 'bg-red-500': $store.ui.toast.type === 'error' }"></div>
+            <div class="px-4 py-3 text-sm text-zinc-700" x-text="$store.ui.toast.message"></div>
+        </div>
+
+    </main>
+
+    <!-- loading splash -->
+    <div x-show="!$store.data.loaded || $store.ui.switching" class="fixed inset-0 flex items-center justify-center text-zinc-300 font-black font-brand text-xl select-none">
+        loading…
+    </div>
+</div>
+
+<!-- ============================================ component templates -->
+
+<template x-component="modal">
+    <div x-data="xProps($el, { toggle: '', wide: '' })" x-init="_initProps()"
+        x-show="$store.ui.modals[toggle]" x-transition.opacity.duration.150ms
+        class="fixed inset-0 z-40 flex items-center justify-center"
+        @keydown.escape.window="$store.ui.modals[toggle] = false">
+        <div class="absolute inset-0 bg-zinc-900/50 backdrop-blur-[2px] cursor-pointer" @click="$store.ui.modals[toggle] = false"></div>
+        <div class="relative bg-white rounded-xl shadow-2xl max-h-[88vh] overflow-y-auto p-8 mx-4 w-full" :class="boolAttr(wide) ? 'max-w-2xl' : 'max-w-xl'">
+            <slot></slot>
+        </div>
+    </div>
+</template>
+
+<!-- prop is named `pct`, NOT `value`: Alpine special-cases :value bindings
+     (property, no attribute) so an attribute-observing component never sees it -->
+<template x-component="progress">
+    <div x-data="xProps($el, { pct: '0', reached: '' })" x-init="_initProps()"
+        class="w-full bg-zinc-200 rounded-full h-2 overflow-hidden">
+        <div class="h-full rounded-full transition-all duration-300"
+            :class="boolAttr(reached) ? 'bg-amber-400' : 'bg-emerald-500'"
+            :style="'width:' + Math.min(100, Number(pct) || 0) + '%'"></div>
+    </div>
+</template>
+
+<script src="js/boot.js"></script>
+</body>
+</html>
