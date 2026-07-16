@@ -4,7 +4,7 @@
         <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/blindmikey/spendwise/main/docs/spendwise-light.svg">
         <img alt="Spend Wise" height="64" src="https://raw.githubusercontent.com/blindmikey/spendwise/main/docs/spendwise-w-bg.svg">
     </picture>
-    <div><a href="https://www.npmjs.com/package/@blindmikey/spendwise"><img alt="npm" src="https://img.shields.io/npm/v/%40blindmikey%2Fspendwise?label=npm&color=009967"></a></div>
+    <div><a href="https://www.npmjs.com/package/spendwise"><img alt="npm" src="https://img.shields.io/npm/v/spendwise?label=npm&color=009967"></a></div>
     <h2>A Simple and easy-to-use envelope-budgeting app.</h2>
     <div><a href='https://ko-fi.com/G0G2231VF9' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi3.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a></div>
     <div><span>&nbsp;</span></div>
