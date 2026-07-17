@@ -20,7 +20,7 @@ Node 22.
 
 
 ```bash
-npm install -g spendwise
+npm i -g spendwise
 spendwise-server --set-password  # required - everyone signs in with this
 spendwise-server                 # → http://localhost:4180
 ```
@@ -143,7 +143,7 @@ Caddy gets you an automatic Let's Encrypt certificate and sets
 
 ```caddyfile
 # /etc/caddy/Caddyfile
-budget.example.com {
+spendwise.example.com {
     reverse_proxy 127.0.0.1:4180
 }
 ```
@@ -154,10 +154,10 @@ budget.example.com {
 server {
     listen 443 ssl;
     http2 on;
-    server_name budget.example.com;
+    server_name spendwise.example.com;
 
-    ssl_certificate     /etc/letsencrypt/live/budget.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/budget.example.com/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/spendwise.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/spendwise.example.com/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:4180;
@@ -170,7 +170,7 @@ server {
 
 server {
     listen 80;
-    server_name budget.example.com;
+    server_name spendwise.example.com;
     return 301 https://$host$request_uri;
 }
 ```

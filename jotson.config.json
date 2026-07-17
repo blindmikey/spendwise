@@ -1,0 +1,18 @@
+{
+  "jsonDir": "data",
+  "publicDir": "",
+  "uploadDir": "",
+  "logo": null,
+  "logoLight": null,
+  "title": "",
+  "labelFields": [
+    "title",
+    "label",
+    "name",
+    "id"
+  ],
+  "idFields": [
+    "id"
+  ],
+  "references": false
+}

@@ -39,6 +39,16 @@ document.addEventListener('alpine:init', () => {
     });
 });
 
+// Last screen (view + month) survives reload. localStorage, not the database:
+// like the theme, it is per-device state - the same db.json is shared between
+// the desktop app, the web server and other machines, and one screen's
+// position must not follow the data.
+const SCREEN_KEY = 'spendwise-last-screen';
+
+function loadScreen () {
+    try { return JSON.parse(localStorage.getItem(SCREEN_KEY)) || {}; } catch (e) { return {}; }
+}
+
 function appRoot () {
     return {
         async init () {
@@ -53,10 +63,20 @@ function appRoot () {
                 const ui = Alpine.store('ui');
                 const keys = FinEngine.monthKeys(res.data);
                 const open = keys.filter((k) => res.data.months[k].status === 'open');
-                ui.currentKey = open.length ? open[open.length - 1] : keys[keys.length - 1];
+                const saved = loadScreen(); // restore last screen, but only what still exists
+                ui.currentKey = res.data.months[saved.key] ? saved.key
+                    : open.length ? open[open.length - 1] : keys[keys.length - 1];
+                if (['month', 'insights', 'settings'].includes(saved.view)) ui.view = saved.view;
                 ui.savedSnapshot = JSON.stringify(res.data.months[ui.currentKey]);
                 // desktop privacy lock; web clients authenticated at the server
                 ui.locked = !!(res.data.settings && res.data.settings.auth) && !window.IS_WEB;
+
+                // reactive persistence: fires on any view/month change, whatever
+                // its origin (nav, header picker, close-out advancing the month)
+                Alpine.effect(() => {
+                    const snap = JSON.stringify({ view: ui.view, key: ui.currentKey });
+                    try { localStorage.setItem(SCREEN_KEY, snap); } catch (e) { /* private mode - session only */ }
+                });
             } catch (e) {
                 showToast('Failed to load data: ' + e.message, 'error', 12000);
             }

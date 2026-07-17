@@ -1,5 +1,10 @@
 @import "tailwindcss" source("../");
 
+/* Manual (class-driven) dark mode: dark:* utilities and the palette block at
+   the foot of this file apply whenever `html.dark` is set, rather than being
+   tied to prefers-color-scheme. The Appearance setting toggles that class. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Roca - display face for headings and big numbers. Self-hosted rather than
    loaded from Typekit: the app must work offline (and under file:// in
    Electron), and its CSP allows no remote origins.
@@ -49,3 +54,76 @@ input[type="number"]::-webkit-inner-spin-button { opacity: 0.35; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--color-zinc-300); border-radius: 5px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-zinc-400); }
+
+/* ============================================================== dark theme
+   Colours are seeded from docs/spendwise-w-bg.svg: a cool slate ground
+   (the #3e434f / #3f3d37 family) with the emerald/teal brand kept as accent.
+
+   Two mechanisms, cleanly split:
+
+   1. NEUTRALS are automatic. Every Tailwind v4 colour utility resolves to
+      var(--color-*), so redefining the zinc variables below re-themes every
+      bg/text/border-zinc-* in the app with no markup changes. The ramp is
+      FLIPPED - the app uses low numbers for fills (bg-zinc-100) and high
+      numbers for ink (text-zinc-700), so low→dark and high→light lands both
+      correctly. (Corollary: a `dark:*-zinc-*` utility resolves against this
+      flipped ramp - dark:bg-zinc-100 is the raised slate, not near-white.)
+
+   2. EVERYTHING ELSE is explicit `dark:` utilities in the markup (white
+      surfaces, accent ink lifted to its 300/400 shade, chip tints as
+      low-alpha washes). No rules here target utility classes: un-layered CSS
+      outranks the entire utilities layer, so a single such override would
+      silently defeat any inline dark:* on the same property. */
+html.dark {
+    color-scheme: dark;
+
+    /* neutral ramp, flipped: fills (low) dark, ink (high) light */
+    --color-zinc-50:  #1b1e25;  /* page ground, input fill */
+    --color-zinc-100: #262a33;  /* raised fill, hover, card surface */
+    --color-zinc-200: #333843;  /* pill fill, hairline border */
+    --color-zinc-300: #464c59;  /* control border, faint glyph */
+    --color-zinc-350: #59606e;
+    --color-zinc-400: #8c929f;  /* muted label, placeholder */
+    --color-zinc-500: #a8aeba;
+    --color-zinc-600: #c4c9d2;
+    --color-zinc-700: #dbdee4;  /* heading, body */
+    --color-zinc-800: #e8eaef;
+    --color-zinc-900: #f3f4f7;  /* default ink */
+    --color-zinc-950: #fafafb;
+}
+
+/* ApexCharts bakes label/grid colours into its SVG at render time from
+   theme.mode, and neither updateOptions() nor the savings chart's in-place
+   updateSeries() fast-path recolours them afterwards - so an instance first
+   drawn under one theme keeps those colours under the other. Pin axis-tick and
+   legend text (and grid lines) from CSS in BOTH themes instead, so they always
+   match html.dark regardless of what was baked. Scoped to axis + legend only:
+   donut data-labels keep their own on-slice contrast. */
+.apexcharts-xaxis-label,
+.apexcharts-yaxis-label { fill: #373d3f !important; }
+.apexcharts-legend-text { color: #373d3f !important; }
+.apexcharts-gridline,
+.apexcharts-xaxis line,
+.apexcharts-yaxis line { stroke: #e4e4e7 !important; }
+
+html.dark .apexcharts-xaxis-label,
+html.dark .apexcharts-yaxis-label { fill: #c7e0da !important; }
+html.dark .apexcharts-legend-text { color: #c7e0da !important; }
+html.dark .apexcharts-gridline,
+html.dark .apexcharts-xaxis line,
+html.dark .apexcharts-yaxis line { stroke: rgb(255 255 255 / 0.09) !important; }
+/* donut slice separators and legend colour keys carry a baked stroke="#ffffff"
+   meant to blend with a white card - retone the separators to the dark card
+   surface (zinc-100 in the flipped ramp) and drop the marker outline. */
+html.dark .apexcharts-pie-area { stroke: #262a33 !important; }
+html.dark .apexcharts-legend-marker path { stroke: transparent !important; }
+
+#wordmark span:nth-child(1) { letter-spacing: 0em; }
+#wordmark span:nth-child(2) { letter-spacing: 0.0125em; }
+#wordmark span:nth-child(3) { letter-spacing: 0em; }
+#wordmark span:nth-child(4) { letter-spacing: 0.00125em; }
+#wordmark span:nth-child(5) { letter-spacing: -0.000125em; }
+#wordmark span:nth-child(6) { letter-spacing: 0.00125em; }
+#wordmark span:nth-child(7) { letter-spacing: 0em; }
+#wordmark span:nth-child(8) { letter-spacing: -0.000125em; }
+#wordmark span:nth-child(9) { letter-spacing: 0.00125em; }

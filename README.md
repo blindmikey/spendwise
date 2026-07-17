@@ -17,16 +17,10 @@
     </picture>
 </div>
 
-Spend Wise is envelope budgeting that runs where you
-want it - as a desktop app, or as a small server you host yourself and reach
-from any browser. Same app, same single data file.
+Spend Wise is envelope budgeting that runs where you want it - as a desktop app,
+or as a small server you host yourself and reach from any browser.
 
-**No account. No cloud. No subscription. No telemetry.** Your finances are a
-JSON file on your own disk, and the app works with the network unplugged.
-
-The one request it ever makes is a public read of this project's latest release
-tag, so it can tell you an update exists - no identifier, nothing about your
-money, and one checkbox in Settings turns it off for good.
+**No account. No cloud. No subscription. No telemetry.**
 
 ## What it does
 
@@ -35,9 +29,8 @@ monthly allotment, and unspent money stays in it. Groceries left over in May is
 still there in June - no zeroing out, no starting over.
 
 **Spending flows in on its own.** Assign an expense to an envelope and it draws
-from that balance instead of counting against the month twice. Every envelope
-shows what's left at a glance: a full green line when untouched, amber when it's
-nearly gone, red when it's overdrawn.
+from that balance instead. Every envelope shows what's left at a glance: a full
+green line when untouched, amber when it's nearly gone, red when it's overdrawn.
 
 **Save up for the big, irregular stuff.** Goal budgets fill toward a target -
 the annual insurance bill, a vacation - and stop contributing once they're full.
@@ -101,7 +94,7 @@ before putting it on the internet, read
 **[docs/hosting.md](docs/hosting.md)** - reverse proxy configs for Caddy, nginx
 and Apache, every setting, and an account of the security model.
 
-### No server? No problem.
+## No server? No problem.
 
 The desktop app can share itself. Set an app password, flip on **Web access**,
 and phones and laptops on your network open the printed URL and edit the same

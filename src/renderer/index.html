@@ -18,6 +18,10 @@
     <meta name="apple-mobile-web-app-title" content="Spend Wise">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="stylesheet" href="css/app.css">
+    <!-- sets html.dark before the body paints (no light flash). Kept after the
+         stylesheet link so it sits after the <base href="/renderer/"> the web
+         server injects there - otherwise js/theme.js would 404 in web mode. -->
+    <script src="js/theme.js"></script>
 
     <script src="vendor/apexcharts.min.js"></script>
     <script src="../shared/engine.js"></script>
@@ -55,26 +59,26 @@
     <!-- lock screen: casual privacy for shared computers (web logs in at the server) -->
     <template x-if="$store.ui.locked">
         <div class="fixed inset-0 z-[100] bg-zinc-100 flex items-center justify-center" x-data="{ pw: '', busy: false, bad: false }">
-            <form class="bg-white border border-zinc-200 rounded-xl shadow-lg p-8 w-80 text-center" :class="bad && 'animate-shake'"
+            <form class="bg-white dark:bg-zinc-100 border border-zinc-200 rounded-xl shadow-lg p-8 w-80 text-center" :class="bad && 'animate-shake'"
                 @submit.prevent="busy = true; bad = false; window.api.authVerify({ password: pw }).then((r) => {
                     busy = false;
                     if (r.ok && r.valid) { $store.ui.locked = false; } else { bad = true; pw = ''; }
                 })">
                 <img src="assets/icon.ico" alt="" class="h-10 w-10 mx-auto mb-2" draggable="false">
-                <h2 class="font-black font-brand text-lg text-emerald-700 mb-4 select-none">Spend Wise</h2>
+                <h2 class="font-black font-brand text-lg text-emerald-700 dark:text-[#c7e0da] mb-4 select-none">Spend Wise</h2>
                 <input type="password" x-model="pw" placeholder="App password" x-init="$nextTick(() => $el.focus())"
                     class="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm text-center focus:outline-none focus:ring-1 focus:ring-emerald-500">
                 <button type="submit" :disabled="busy || !pw"
-                    class="mt-3 w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-md py-2 text-sm font-bold cursor-pointer transition-colors disabled:bg-zinc-200 disabled:text-zinc-400">Unlock</button>
-                <p x-show="bad" class="text-xs text-red-600 mt-2">Wrong password</p>
+                    class="mt-3 w-full hover:bg-emerald-500 text-white dark:text-[#1b1e25] rounded-md py-2 text-sm font-bold cursor-pointer transition-colors disabled:bg-zinc-200 disabled:text-zinc-400">Unlock</button>
+                <p x-show="bad" class="text-xs text-red-600 dark:text-red-400 mt-2">Wrong password</p>
             </form>
         </div>
     </template>
 
     <!-- ================================================== header -->
-    <header class="bg-white border-b border-zinc-200 sticky top-0 z-30">
+    <header class="bg-white dark:bg-zinc-100 border-b border-zinc-200 sticky top-0 z-30">
         <div class="max-w-screen-2xl mx-auto px-3 sm:px-6 py-3 flex items-center justify-between">
-            <div class="flex items-center gap-2.5 select-none shrink-0">
+            <div class="flex items-center gap-2.5 select-none shrink-0" :class="$store.ui.view !== 'month' && 'cursor-pointer'" @click="switchView('month')">
                 <!-- the piggy's visual mass sits ~10% low in its square (light
                      slot/ears on top, heavy body below), so a geometrically
                      centred icon reads low. -2.5px puts its centre of mass on
@@ -84,7 +88,7 @@
                      20px), so items-center centres the BOX and leaves the visible
                      letters riding high. Same 0.15em correction as the group
                      titles - measured, and scales with font-size. -->
-                <h1 class="font-black font-brand tracking-tight text-2xl leading-none text-emerald-700 hidden sm:block relative top-[0.125em]">Spend Wise</h1>
+                <h1 id="wordmark" class="font-black font-brand tracking-tight text-2xl leading-none text-emerald-700 dark:text-[#c7e0da] hidden sm:block relative top-[0.125em]"><span>S</span><span>p</span><span>e</span><span>n</span><span>d</span> <span>W</span><span>i</span><span>s</span><span>e</span></h1>
             </div>
             <div class="flex items-center gap-2 sm:gap-4">
                 <!-- month picker (month view only): status tag + selector.
@@ -94,19 +98,19 @@
                 <template x-if="$store.ui.view === 'month' && $store.data.db && $store.ui.currentKey && $store.data.db.months[$store.ui.currentKey]">
                 <div class="flex items-center gap-2">
                     <span x-show="JSON.stringify($store.data.db.months[$store.ui.currentKey]) !== $store.ui.savedSnapshot"
-                        class="text-amber-500 select-none" title="Unsaved changes">●</span>
+                        class="text-amber-500 dark:text-amber-400 select-none" title="Unsaved changes">●</span>
                     <!-- on phones the open/closed pill lives in the This Month panel instead
                          (which sits inside main, so it goes with it while switching) -->
                     <span x-show="!$store.ui.switching"
                         class="hidden sm:inline-block text-[10px] uppercase tracking-widest font-bold px-2.5 py-1 rounded-full select-none"
                         :class="$store.data.db.months[$store.ui.currentKey].status === 'closed'
-                            ? ($store.ui.unlockedKeys.includes($store.ui.currentKey) ? 'bg-amber-100 text-amber-700' : 'bg-zinc-200 text-zinc-500')
-                            : 'bg-emerald-100 text-emerald-700'"
+                            ? ($store.ui.unlockedKeys.includes($store.ui.currentKey) ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400' : 'bg-zinc-200 text-zinc-500')
+                            : 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'"
                         x-text="$store.data.db.months[$store.ui.currentKey].status === 'closed'
                             ? ($store.ui.unlockedKeys.includes($store.ui.currentKey) ? 'closed · editing' : 'closed') : 'open'"></span>
                     <select :value="$store.ui.currentKey"
                         @change="$store.ui.monthGoto && $store.ui.monthGoto($event.target.value).then(() => { $el.value = $store.ui.currentKey })"
-                        class="border border-zinc-300 bg-white rounded-md px-2.5 py-1 text-sm font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                        class="border border-zinc-300 bg-white dark:bg-zinc-100 rounded-md px-2.5 py-1 text-sm dark:text-[#c7e0da] font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-emerald-500">
                         <template x-for="k in FinEngine.monthKeys($store.data.db).slice().reverse()" :key="k">
                             <option :value="k" :selected="k === $store.ui.currentKey" x-text="FinEngine.keyLabel(k)"></option>
                         </template>
@@ -116,21 +120,21 @@
                 <nav class="flex gap-1 items-center">
                 <button type="button" @click="switchView('month')"
                     class="px-2.5 sm:px-4 py-1.5 rounded-md text-sm font-semibold transition-colors cursor-pointer"
-                    :class="$store.ui.view === 'month' ? 'bg-emerald-600 text-white' : 'text-zinc-500 hover:bg-zinc-100'">Month</button>
+                    :class="$store.ui.view === 'month' ? 'bg-emerald-600 dark:bg-emerald-400/70 text-white dark:text-[#1b1e25]' : 'text-zinc-500 hover:bg-zinc-100'">Month</button>
                 <button type="button" @click="switchView('insights')" title="Insights"
                     class="px-2.5 sm:px-4 py-1.5 rounded-md text-sm font-semibold transition-colors cursor-pointer flex items-center"
-                    :class="$store.ui.view === 'insights' ? 'bg-emerald-600 text-white' : 'text-zinc-500 hover:bg-zinc-100'">
+                    :class="$store.ui.view === 'insights' ? 'bg-emerald-600 dark:bg-emerald-400/70 text-white dark:text-[#1b1e25]' : 'text-zinc-500 hover:bg-zinc-100'">
                     <span class="hidden sm:inline">Insights</span>
                     <svg class="w-4 h-4 sm:hidden"><use href="#i-bulb"/></svg>
                 </button>
                 <button type="button" @click="switchView('settings')"
                     :title="$store.data.update.available ? 'Settings — version ' + $store.data.update.latest + ' is available' : 'Settings'"
                     class="relative p-1.5 rounded-md transition-colors cursor-pointer"
-                    :class="$store.ui.view === 'settings' ? 'bg-emerald-600 text-white' : 'text-zinc-500 hover:bg-zinc-100'">
+                    :class="$store.ui.view === 'settings' ? 'bg-emerald-600 dark:bg-emerald-400/70 text-white dark:text-[#1b1e25]' : 'text-zinc-500 hover:bg-zinc-100'">
                     <!-- the launch toast fades; this doesn't, so the nudge survives
                          without ever blocking the books -->
                     <span x-show="$store.data.update.available" aria-hidden="true"
-                        class="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white"></span>
+                        class="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-zinc-100"></span>
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5" aria-hidden="true">
                         <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
                     </svg>
@@ -143,7 +147,7 @@
     <!-- offline (web clients only): every save needs the server, so the app
          goes read-only rather than letting edits pile up with nowhere to go -->
     <div x-show="$store.ui.offline" x-cloak
-        class="bg-amber-100 border-b border-amber-300 text-amber-900 text-xs text-center py-2 px-4 sticky top-14 z-20 select-none">
+        class="bg-amber-100 dark:bg-amber-500/15 border-b border-amber-300 dark:border-amber-500/30 text-amber-900 dark:text-amber-300 text-xs text-center py-2 px-4 sticky top-14 z-20 select-none">
         <span class="font-bold">Offline</span> - can’t reach the server. Editing is paused until the connection
         returns; anything you already typed is still here.
     </div>
@@ -169,9 +173,9 @@
                              per-child opt-out inside a disabled fieldset -->
                         <fieldset class="flex-1 w-full min-w-0 border-0 m-0 p-0 order-2 xl:order-none">
                             <template x-for="group in month.groups" :key="group.groupId">
-                                <section class="mb-5 bg-white rounded-lg border border-zinc-200 shadow-sm overflow-hidden">
+                                <section class="mb-5 bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm overflow-hidden">
                                     <header @click="toggleCollapsed(group.groupId)"
-                                        class="flex justify-between items-center px-4 py-2.5 bg-emerald-600 text-white cursor-pointer select-none">
+                                        class="flex justify-between items-center px-4 py-2.5 bg-emerald-600 dark:bg-emerald-400/70 text-white dark:text-[#1b1e25] cursor-pointer select-none">
                                         <!-- the amount is the preferred item: it never wraps or shrinks;
                                              the title takes whatever room is left (min-w-0 lets it).
                                              top-[0.15em]: Roca's line box is taller above the caps than
@@ -190,7 +194,7 @@
                                     </header>
                                     <div x-show="!collapsed[group.groupId]" x-collapse.duration.200ms>
                                         <div class="p-2.5 sm:p-4">
-                                            <p class="text-xs text-zinc-400 mb-3 grayscale" x-text="groupHint(group.kind)"></p>
+                                            <p class="text-xs text-zinc-400 mb-3" x-html="groupHint(group.kind)"></p>
 
                                             <!-- column headers for envelope/goal groups -->
                                             <div x-show="(group.kind === 'envelope' || group.kind === 'goal') && group.fields.length"
@@ -235,12 +239,12 @@
                                                                     ? (field.pinned ? 'Was carried into the next month' : 'Was not carried forward')
                                                                     : (field.pinned ? 'Carries into future months' : 'This month only - click to pin')"
                                                                 class="max-sm:order-1 w-7 h-7 shrink-0 rounded flex items-center justify-center cursor-pointer transition-colors"
-                                                                :class="field.pinned ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-300 hover:text-zinc-500'"><svg class="w-3.5 h-3.5"><use href="#i-pin"/></svg></button>
+                                                                :class="field.pinned ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-zinc-100 text-zinc-300 hover:text-zinc-500'"><svg class="w-3.5 h-3.5"><use href="#i-pin"/></svg></button>
                                                         </template>
 
                                                         <div class="relative flex-1 min-w-28 max-sm:order-2">
                                                             <input type="text" x-model="field.label" placeholder="Label" :disabled="frozen"
-                                                                class="w-full border rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white focus:outline-none focus:ring-1"
+                                                                class="w-full border rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white dark:text-[#c7e0da] dark:focus:bg-zinc-100 focus:outline-none focus:ring-1"
                                                                 :class="group.kind === 'envelope' && overBudget(field)
                                                                     ? 'border-red-400 focus:ring-red-400'
                                                                     : 'border-zinc-200 focus:ring-emerald-500'">
@@ -280,17 +284,17 @@
                                                                     :title="group.kind === 'expense' && field.budgetId && !FinEngine.num(field.value)
                                                                         ? 'Linked to an envelope but $0 - it draws nothing until an amount is entered'
                                                                         : (group.kind === 'envelope' || group.kind === 'goal' ? 'Monthly allotment' : 'Amount')"
-                                                                    class="w-24 max-sm:w-20 border border-zinc-200 rounded pl-5 pr-1 py-1.5 text-sm text-right bg-zinc-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                                                                    :class="group.kind === 'expense' && field.budgetId && !FinEngine.num(field.value) && 'ring-1 ring-amber-400 bg-amber-50'">
+                                                                    class="w-24 max-sm:w-20 border border-zinc-200 rounded pl-5 pr-1 py-1.5 text-sm dark:text-[#c7e0da] text-right bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                                                    :class="group.kind === 'expense' && field.budgetId && !FinEngine.num(field.value) && 'ring-1 ring-amber-400 bg-amber-50 dark:bg-amber-500/10'">
                                                             </div>
                                                         </template>
                                                         <template x-if="isAuto(field) && !isSched(group, field)">
-                                                            <span class="w-24 max-sm:w-20 max-sm:order-3 shrink-0 text-right text-sm tabular-nums font-semibold text-violet-600 pr-1 select-none"
+                                                            <span class="w-24 max-sm:w-20 max-sm:order-3 shrink-0 text-right text-sm tabular-nums font-semibold text-violet-600 dark:text-violet-400 pr-1 select-none"
                                                                 :title="'Auto-funded: ' + field.auto.pct + '% of the selected groups’ net'"
                                                                 x-text="fmt(rateOf(field))"></span>
                                                         </template>
                                                         <template x-if="isSched(group, field)">
-                                                            <span class="w-24 max-sm:w-20 max-sm:order-3 shrink-0 text-right text-sm tabular-nums font-semibold text-violet-600 pr-1 select-none"
+                                                            <span class="w-24 max-sm:w-20 max-sm:order-3 shrink-0 text-right text-sm tabular-nums font-semibold text-violet-600 dark:text-violet-400 pr-1 select-none"
                                                                 :title="'Scheduled deposit: ' + fmt(field.target) + ' due ' + FinEngine.keyLabel(field.dueKey) + ' - headroom spread over the months remaining'"
                                                                 x-text="fmt(field.value)"></span>
                                                         </template>
@@ -303,7 +307,7 @@
                                                             <div class="max-sm:order-6 max-sm:flex max-sm:items-center max-sm:gap-1.5 shrink-0 sm:contents">
                                                                 <span class="sm:hidden shrink-0 text-[10px] uppercase tracking-widest text-zinc-350 select-none">spent</span>
                                                                 <span class="w-24 max-sm:w-auto shrink-0 text-right text-xs tabular-nums select-none"
-                                                                    :class="effSpent(field) > 0 ? (overBudget(field) ? 'text-red-600 font-semibold' : 'text-emerald-600') : 'text-zinc-300'"
+                                                                    :class="effSpent(field) > 0 ? (overBudget(field) ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-emerald-600 dark:text-emerald-400') : 'text-zinc-300'"
                                                                     :title="'Spent from this envelope - expense rows assigned to it via the “from” dropdown' + (FinEngine.num(field.spent) > 0 ? ' (includes ' + fmt(field.spent) + ' carried from the legacy import)' : '')"
                                                                     x-text="fmt(effSpent(field))"></span>
                                                             </div>
@@ -311,8 +315,8 @@
                                                         <template x-if="group.kind === 'envelope' || group.kind === 'goal'">
                                                             <div class="max-sm:order-6 max-sm:flex max-sm:items-center max-sm:gap-1.5 shrink-0 sm:contents">
                                                                 <span class="sm:hidden shrink-0 text-[10px] uppercase tracking-widest text-zinc-350 select-none">available</span>
-                                                                <span class="w-24 max-sm:w-auto shrink-0 text-right text-xs tabular-nums font-semibold select-none"
-                                                                    :class="overBudget(field) ? 'text-red-600' : (progress(field).reached ? 'text-amber-600' : 'text-zinc-600')"
+                                                                <span class="w-24 max-sm:w-auto shrink-0 text-right text-xs dark:text-[#c7e0da] tabular-nums font-semibold select-none"
+                                                                    :class="overBudget(field) ? 'text-red-600 dark:text-red-400' : (progress(field).reached ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-600')"
                                                                     :title="progress(field).reached ? 'At the cap - holds here until spent' : 'Available in this envelope right now'"
                                                                     x-text="fmt(field.avail)"></span>
                                                             </div>
@@ -326,7 +330,7 @@
                                                                 <div class="relative" title="Goal target">
                                                                     <span class="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 text-xs select-none">$</span>
                                                                     <input type="number" x-model.number="field.target" placeholder="target" :disabled="frozen"
-                                                                        class="w-24 max-sm:w-20 border border-zinc-200 rounded pl-5 pr-1 py-1.5 text-sm text-right bg-zinc-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                                                        class="w-24 max-sm:w-20 border border-zinc-200 rounded pl-5 pr-1 py-1.5 text-sm text-right bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 dark:text-[#c7e0da] focus:outline-none focus:ring-1 focus:ring-emerald-500">
                                                                 </div>
                                                             </div>
                                                         </template>
@@ -344,7 +348,7 @@
                                                                     :disabled="frozen" title="Draw this expense from an envelope"
                                                                     x-effect="budgetOptions; field.budgetId; $nextTick(() => { $el.value = field.budgetId || ''; })"
                                                                     class="w-[calc(100%-24px)] sm:w-[198px] shrink-0 text-xs border border-zinc-200 rounded py-2 px-1 bg-zinc-50 cursor-pointer focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                                                                    :class="field.budgetId && 'text-emerald-700 font-semibold'">
+                                                                    :class="field.budgetId && 'text-emerald-700 dark:text-emerald-400/70 font-semibold'">
                                                                     <template x-for="opt in budgetOptions" :key="opt.id">
                                                                         <!-- x-effect, not :value - Alpine drops the value
                                                                              ATTRIBUTE for an empty string -->
@@ -359,7 +363,7 @@
                                                             <button type="button" @click="field.accounted = !field.accounted" :disabled="frozen"
                                                                 :title="field.accounted ? 'Marked as paid / received' : 'Mark as paid / received'"
                                                                 class="w-7 h-7 shrink-0 max-sm:order-4 rounded flex items-center justify-center cursor-pointer transition-colors"
-                                                                :class="field.accounted ? 'bg-emerald-500 text-white' : 'bg-zinc-100 text-zinc-300 hover:text-zinc-500'"><svg class="w-3.5 h-3.5"><use href="#i-check"/></svg></button>
+                                                                :class="field.accounted ? 'bg-emerald-500 dark:bg-emerald-400/70 text-white dark:text-[#1b1e25]' : 'bg-zinc-100 text-zinc-300 hover:text-zinc-500'"><svg class="w-3.5 h-3.5"><use href="#i-check"/></svg></button>
                                                         </template>
 
                                                         <!-- envelope: auto-fund -->
@@ -367,7 +371,7 @@
                                                             <button type="button" @click="toggleAutoEditor(field)" :disabled="frozen"
                                                                 title="Auto-fund: derive this monthly amount from a percentage of other groups (e.g. 33% of self-employment net)"
                                                                 class="max-sm:hidden w-7 h-7 shrink-0 rounded flex items-center justify-center cursor-pointer transition-colors"
-                                                                :class="isAuto(field) ? 'bg-violet-100 text-violet-700' : 'bg-zinc-100 text-zinc-300 hover:text-zinc-500'"><svg class="w-3.5 h-3.5"><use href="#i-percent"/></svg></button>
+                                                                :class="isAuto(field) ? 'bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-400' : 'bg-zinc-100 text-zinc-300 hover:text-zinc-500'"><svg class="w-3.5 h-3.5"><use href="#i-percent"/></svg></button>
                                                         </template>
 
                                                         <!-- goal: schedule -->
@@ -375,21 +379,21 @@
                                                             <button type="button" @click="toggleSchedEditor(field)" :disabled="frozen"
                                                                 title="Schedule: set a due date and frequency and the monthly deposit is calculated for you - great for recurring bills"
                                                                 class="max-sm:hidden w-7 h-7 shrink-0 rounded flex items-center justify-center cursor-pointer transition-colors"
-                                                                :class="field.dueKey ? 'bg-violet-100 text-violet-700' : 'bg-zinc-100 text-zinc-300 hover:text-zinc-500'"><svg class="w-3.5 h-3.5"><use href="#i-clock"/></svg></button>
+                                                                :class="field.dueKey ? 'bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-400' : 'bg-zinc-100 text-zinc-300 hover:text-zinc-500'"><svg class="w-3.5 h-3.5"><use href="#i-clock"/></svg></button>
                                                         </template>
 
                                                         <!-- tags -->
                                                         <button type="button" @click="toggleTagEditor(field)" title="Tags" :disabled="offline"
                                                             class="max-sm:hidden w-8 h-7 shrink-0 rounded flex items-center justify-center cursor-pointer transition-colors"
-                                                            :class="(field.tags && field.tags.length) ? 'bg-emerald-100 text-emerald-700' : 'bg-zinc-100 text-zinc-300 hover:text-zinc-500'">
+                                                            :class="(field.tags && field.tags.length) ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-zinc-100 text-zinc-300 hover:text-zinc-500'">
                                                             <svg x-show="!(field.tags && field.tags.length > 1)" class="w-3.5 h-3.5"><use href="#i-tag"/></svg>
                                                             <svg x-show="field.tags && field.tags.length > 1" class="w-4 h-4"><use href="#i-tags"/></svg>
                                                         </button>
 
                                                         <button type="button" @click="removeField(group, field)" :disabled="frozen" title="Remove this field"
-                                                            class="max-sm:hidden w-7 h-7 shrink-0 rounded flex items-center justify-center cursor-pointer bg-zinc-100 text-zinc-400 hover:bg-red-100 hover:text-red-600 transition-colors"><svg class="w-3.5 h-3.5"><use href="#i-xmark"/></svg></button>
+                                                            class="max-sm:hidden w-7 h-7 shrink-0 rounded flex items-center justify-center cursor-pointer bg-zinc-100 text-zinc-400 hover:bg-red-100 dark:hover:bg-red-500/15 hover:text-red-600 dark:hover:text-red-400 transition-colors"><svg class="w-3.5 h-3.5"><use href="#i-xmark"/></svg></button>
                                                         <button type="button" @click="addField(group, fi)" :disabled="frozen" title="Add a field below"
-                                                            class="max-sm:hidden w-7 h-7 shrink-0 rounded flex items-center justify-center cursor-pointer bg-zinc-100 text-zinc-400 hover:bg-emerald-100 hover:text-emerald-700 transition-colors"><svg class="w-3.5 h-3.5"><use href="#i-plus"/></svg></button>
+                                                            class="max-sm:hidden w-7 h-7 shrink-0 rounded flex items-center justify-center cursor-pointer bg-zinc-100 text-zinc-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/15 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors"><svg class="w-3.5 h-3.5"><use href="#i-plus"/></svg></button>
 
                                                         <!-- phones: row actions menu (everything but the checkmark) -->
                                                         <!-- .stop is load-bearing: without it the menu's @click.outside
@@ -401,31 +405,31 @@
                                                         <button type="button" @click.stop="toggleRowMenu(field, $event)" title="Row actions"
                                                             class="sm:hidden max-sm:order-4 w-7 h-7 shrink-0 rounded flex items-center justify-center cursor-pointer bg-zinc-100 text-zinc-400 active:bg-zinc-200"><svg class="w-3.5 h-3.5"><use href="#i-kebab"/></svg></button>
                                                         <template x-if="rowMenuFor === field.id">
-                                                            <div class="fixed z-50 w-56 bg-white border border-zinc-200 rounded-md shadow-lg py-1"
+                                                            <div class="fixed z-50 w-56 bg-white dark:bg-zinc-100 border border-zinc-200 rounded-md shadow-lg py-1"
                                                                 :style="{ left: rowMenuPos.x + 'px', top: rowMenuPos.y + 'px' }"
                                                                 @click.outside="rowMenuFor = null">
                                                                 <template x-if="group.kind === 'envelope'">
                                                                     <button type="button" :disabled="frozen" @click="rowMenuFor = null; toggleAutoEditor(field)"
                                                                         class="w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 cursor-pointer text-zinc-600 hover:bg-zinc-50 disabled:opacity-40">
-                                                                        <svg class="w-3.5 h-3.5" :class="isAuto(field) && 'text-violet-600'"><use href="#i-percent"/></svg> Auto-fund…
+                                                                        <svg class="w-3.5 h-3.5" :class="isAuto(field) && 'text-violet-600 dark:text-violet-400'"><use href="#i-percent"/></svg> Auto-fund…
                                                                     </button>
                                                                 </template>
                                                                 <template x-if="group.kind === 'goal'">
                                                                     <button type="button" :disabled="frozen" @click="rowMenuFor = null; toggleSchedEditor(field)"
                                                                         class="w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 cursor-pointer text-zinc-600 hover:bg-zinc-50 disabled:opacity-40">
-                                                                        <svg class="w-3.5 h-3.5" :class="field.dueKey && 'text-violet-600'"><use href="#i-clock"/></svg> Schedule…
+                                                                        <svg class="w-3.5 h-3.5" :class="field.dueKey && 'text-violet-600 dark:text-violet-400'"><use href="#i-clock"/></svg> Schedule…
                                                                     </button>
                                                                 </template>
                                                                 <button type="button" :disabled="offline" @click="rowMenuFor = null; toggleTagEditor(field)"
                                                                     class="w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 cursor-pointer text-zinc-600 hover:bg-zinc-50 disabled:opacity-40">
-                                                                    <svg class="w-3.5 h-3.5" :class="field.tags && field.tags.length && 'text-emerald-600'"><use href="#i-tag"/></svg> Tags…
+                                                                    <svg class="w-3.5 h-3.5" :class="field.tags && field.tags.length && 'text-emerald-600 dark:text-emerald-400'"><use href="#i-tag"/></svg> Tags…
                                                                 </button>
                                                                 <button type="button" :disabled="frozen" @click="rowMenuFor = null; addField(group, fi)"
                                                                     class="w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 cursor-pointer text-zinc-600 hover:bg-zinc-50 disabled:opacity-40">
                                                                     <svg class="w-3.5 h-3.5"><use href="#i-plus"/></svg> Add a field below
                                                                 </button>
                                                                 <button type="button" :disabled="frozen" @click="rowMenuFor = null; removeField(group, field)"
-                                                                    class="w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 cursor-pointer text-red-600 hover:bg-red-50 disabled:opacity-40">
+                                                                    class="w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 cursor-pointer text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 disabled:opacity-40">
                                                                     <svg class="w-3.5 h-3.5"><use href="#i-xmark"/></svg> Remove field
                                                                 </button>
                                                             </div>
@@ -436,20 +440,20 @@
                                                     <div x-show="schedEditorFor === field.id" class="flex flex-wrap items-center gap-2 mt-1.5 pl-9 pr-20 text-[11px] text-zinc-400">
                                                         <span class="select-none">due</span>
                                                         <input type="month" x-model="field.dueKey" :disabled="frozen" title="When the full target is needed - the monthly deposit is derived from this."
-                                                            class="border border-zinc-200 rounded px-1.5 py-0.5 bg-white text-[11px] focus:outline-none focus:ring-1 focus:ring-violet-400">
+                                                            class="border border-zinc-200 rounded px-1.5 py-0.5 bg-white dark:bg-zinc-100 dark:text-[#c7e0da] text-[11px] focus:outline-none focus:ring-1 focus:ring-violet-400">
                                                         <span class="select-none">every</span>
                                                         <input type="number" min="0" x-model.number="field.freqMonths" placeholder="12" :disabled="frozen"
                                                             title="Months between due dates (12 = yearly). 0 or blank = one-time - the due date won’t advance."
-                                                            class="w-12 border border-zinc-200 rounded px-1.5 py-0.5 text-right bg-white text-[11px] focus:outline-none focus:ring-1 focus:ring-violet-400">
+                                                            class="w-12 border border-zinc-200 rounded px-1.5 py-0.5 text-right bg-white dark:bg-zinc-100 text-[11px] dark:text-[#c7e0da] focus:outline-none focus:ring-1 focus:ring-violet-400">
                                                         <span class="select-none">months</span>
-                                                        <span x-show="isSched(group, field)" class="text-violet-600 font-semibold tabular-nums select-none"
+                                                        <span x-show="isSched(group, field)" class="text-violet-600 dark:text-violet-400 font-semibold tabular-nums select-none"
                                                             x-text="'= ' + fmt(field.value) + ' this month'"></span>
                                                         <button type="button" x-show="field.dueKey" @click="clearSchedule(field)" :disabled="frozen"
-                                                            class="text-zinc-400 hover:text-red-600 cursor-pointer">clear</button>
+                                                            class="text-zinc-400 hover:text-red-600 dark:hover:text-red-400 cursor-pointer">clear</button>
                                                         <template x-if="FinEngine.num(field.target) > 0">
                                                             <div class="flex items-center gap-2 flex-1 min-w-40">
                                                                 <span class="text-[11px] whitespace-nowrap select-none"
-                                                                    :class="progress(field).reached ? 'text-amber-600 font-bold' : 'text-zinc-400'"
+                                                                    :class="progress(field).reached ? 'text-amber-600 dark:text-amber-400 font-bold' : 'text-zinc-400'"
                                                                     x-text="progress(field).reached
                                                                         ? (contrib(group, field) > 0 ? '● funded' : '● at cap - contributing $0 until spent')
                                                                         : progress(field).pct + '% of ' + fmt(field.target)
@@ -463,7 +467,7 @@
                                                         <span class="select-none">auto-fund</span>
                                                         <input type="number" min="0" max="100" step="0.01" :value="field.auto ? field.auto.pct : ''" @input="setAutoPct(field, $event.target.value)" :disabled="frozen"
                                                             title="Decimals allowed - e.g. 33.33 for one third"
-                                                            class="w-16 border border-zinc-200 rounded px-1.5 py-0.5 text-right bg-white focus:outline-none focus:ring-1 focus:ring-violet-400">
+                                                            class="w-16 border border-zinc-200 rounded px-1.5 py-0.5 text-right dark:text-[#c7e0da] bg-white dark:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-violet-400">
                                                         <span class="select-none">% of the net of</span>
                                                         <template x-for="g in sourceGroups" :key="g.groupId">
                                                             <label class="flex items-center gap-1 cursor-pointer bg-zinc-100 hover:bg-zinc-200 rounded-full px-2.5 py-1 select-none transition-colors">
@@ -473,18 +477,18 @@
                                                                 <span x-text="g.title"></span>
                                                             </label>
                                                         </template>
-                                                        <span x-show="isAuto(field)" class="text-violet-600 font-semibold tabular-nums select-none"
+                                                        <span x-show="isAuto(field)" class="text-violet-600 dark:text-violet-400 font-semibold tabular-nums select-none"
                                                             x-text="'= ' + fmt(rateOf(field)) + ' this month'"></span>
                                                         <button type="button" x-show="field.auto" @click="clearAuto(field)" :disabled="frozen"
-                                                            class="text-zinc-400 hover:text-red-600 cursor-pointer">clear</button>
+                                                            class="text-zinc-400 hover:text-red-600 dark:hover:text-red-400 cursor-pointer">clear</button>
                                                     </div>
 
                                                     <!-- tag editor -->
                                                     <div x-show="tagEditorFor === field.id" class="flex flex-wrap items-center gap-1.5 mt-1.5 pl-9">
                                                         <template x-for="tag in field.tags" :key="tag">
-                                                            <span class="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 text-[11px] px-2 py-0.5 rounded-full">
+                                                            <span class="inline-flex items-center gap-1 bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 text-[11px] px-2 py-0.5 rounded-full">
                                                                 <span x-text="tag"></span>
-                                                                <button type="button" @click="removeTag(field, tag)" :disabled="offline" class="cursor-pointer hover:text-emerald-900 flex items-center"><svg class="w-2.5 h-2.5"><use href="#i-xmark"/></svg></button>
+                                                                <button type="button" @click="removeTag(field, tag)" :disabled="offline" class="cursor-pointer hover:text-emerald-900 dark:hover:text-emerald-200 flex items-center"><svg class="w-2.5 h-2.5"><use href="#i-xmark"/></svg></button>
                                                             </span>
                                                         </template>
                                                         <input type="text" x-model="newTag" placeholder="add tag ⏎" :disabled="offline"
@@ -492,19 +496,19 @@
                                                             @focus="openTagSuggest($event)"
                                                             @input="tagSuggestOpen || openTagSuggest($event)"
                                                             @blur="tagSuggestOpen = false"
-                                                            class="w-28 border border-zinc-200 rounded-full px-2.5 py-0.5 text-[11px] bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400">
+                                                            class="w-28 border border-zinc-200 rounded-full px-2.5 py-0.5 text-[11px] dark:text-[#c7e0da] bg-white dark:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-400">
                                                         <!-- suggestion dropdown: x-if (not x-show - a string :style
                                                              would clobber x-show's display:none, and 100+ hidden
                                                              copies would render buttons); fixed-positioned because
                                                              the group card clips overflow; mousedown.prevent keeps
                                                              the input focused so blur doesn't eat the click -->
                                                         <template x-if="tagSuggestOpen && tagEditorFor === field.id && tagSuggestions(field).length > 0">
-                                                            <div class="tag-suggest fixed z-50 w-44 bg-white border border-zinc-200 rounded-md shadow-lg overflow-hidden"
+                                                            <div class="tag-suggest fixed z-50 w-44 bg-white dark:bg-zinc-100 border border-zinc-200 rounded-md shadow-lg overflow-hidden"
                                                                 :style="{ left: tagSuggestPos.x + 'px', top: tagSuggestPos.y + 'px' }">
                                                                 <template x-for="(t, ti) in tagSuggestions(field)" :key="t">
                                                                     <button type="button" @mousedown.prevent="pickTag(field, t)"
                                                                         class="w-full text-left px-2.5 py-1.5 text-[11px] cursor-pointer flex items-center gap-1.5"
-                                                                        :class="ti === tagSuggestIndex ? 'bg-emerald-100 text-emerald-800' : 'text-zinc-600 hover:bg-zinc-50'">
+                                                                        :class="ti === tagSuggestIndex ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-300' : 'text-zinc-600 hover:bg-zinc-50'">
                                                                         <svg class="w-2.5 h-2.5 shrink-0 text-emerald-500"><use href="#i-tag"/></svg>
                                                                         <span x-text="t"></span>
                                                                     </button>
@@ -517,7 +521,7 @@
 
                                             <div x-show="!group.fields.length" class="text-center py-2">
                                                 <button type="button" @click="addField(group)" :disabled="frozen"
-                                                    class="text-sm text-zinc-400 hover:text-emerald-600 cursor-pointer border border-dashed border-zinc-300 hover:border-emerald-400 rounded-md px-4 py-2 transition-colors inline-flex items-center gap-1.5"><svg class="w-3 h-3"><use href="#i-plus"/></svg>add the first field</button>
+                                                    class="text-sm text-zinc-400 hover:text-emerald-600 dark:hover:text-emerald-400 cursor-pointer border border-dashed border-zinc-300 hover:border-emerald-400 rounded-md px-4 py-2 transition-colors inline-flex items-center gap-1.5"><svg class="w-3 h-3"><use href="#i-plus"/></svg>add the first field</button>
                                             </div>
                                         </div>
                                     </div>
@@ -530,45 +534,45 @@
                              interleave with the groups by `order`: This Month +
                              action buttons first, groups second, savings last -->
                         <aside class="contents xl:block xl:w-96 xl:shrink-0 xl:space-y-5 xl:sticky xl:top-20">
-                            <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-4 w-full hidden sm:block xl:w-auto order-3 xl:order-none">
+                            <section class="bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm p-4 w-full hidden sm:block xl:w-auto order-3 xl:order-none">
                                 <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-1 select-none">Savings</h3>
                                 <!-- phones see charts in Insights; the monthly sparkline is desktop-only -->
                                 <div x-ref="savingsChart" class="-mx-2"></div>
-                                <div class="text-4xl font-black font-brand text-center text-zinc-800" x-text="fmt(currentSavings)"></div>
+                                <div class="text-4xl font-black font-brand text-center text-zinc-800 dark:text-[#c7e0da]" x-text="fmt(currentSavings)"></div>
                                 <div class="text-center text-xs text-zinc-400 mb-3" x-text="fmt(withBudgets) + ' incl. unspent envelopes'"></div>
                                 <div class="flex items-center justify-between border-t border-zinc-100 pt-3">
                                     <span class="text-xs text-zinc-500 select-none">Savings at month start</span>
-                                    <span class="text-sm font-semibold tabular-nums text-zinc-700 select-none"
+                                    <span class="text-sm font-semibold tabular-nums text-zinc-700 dark:text-[#c7e0da] select-none"
                                         title="Derived from the previous month’s close-out. The very first month starts from “Initial savings” in Settings."
                                         x-text="fmt(month.startingSavings)"></span>
                                 </div>
                             </section>
 
-                            <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-4 w-full xl:w-auto order-1 xl:order-none">
+                            <section class="bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm p-4 w-full xl:w-auto order-1 xl:order-none">
                                 <div class="flex items-center justify-between mb-2">
                                     <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 select-none">This Month</h3>
                                     <span class="sm:hidden text-[10px] uppercase tracking-widest font-bold px-2.5 py-1 rounded-full select-none"
-                                        :class="isClosed ? (unlocked ? 'bg-amber-100 text-amber-700' : 'bg-zinc-200 text-zinc-500') : 'bg-emerald-100 text-emerald-700'"
+                                        :class="isClosed ? (unlocked ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400' : 'bg-zinc-200 text-zinc-500') : 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'"
                                         x-text="isClosed ? (unlocked ? 'closed · editing' : 'closed') : 'open'"></span>
                                 </div>
-                                <div class="text-4xl font-black font-brand text-center" :class="net >= 0 ? 'text-emerald-600' : 'text-red-600'" x-text="fmtSigned(net)"></div>
+                                <div class="text-4xl font-black font-brand text-center" :class="net >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'" x-text="fmtSigned(net)"></div>
                             </section>
 
                             <div class="space-y-2 w-full xl:w-auto order-1 xl:order-none">
                                 <template x-if="!isClosed">
                                     <div class="space-y-2">
                                         <button type="button" @click="save()" :disabled="offline" title="Save (Ctrl+S) · Undo (Ctrl+Z) · Redo (Ctrl+Y)"
-                                            class="w-full bg-emerald-600 hover:bg-emerald-500 border border-emerald-600 hover:border-emerald-500 text-white font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors disabled:bg-zinc-200 disabled:text-zinc-400"
+                                            class="w-full bg-emerald-600 dark:bg-emerald-400/70 dark:text-[#1b1e25] hover:bg-emerald-500 border border-emerald-600 hover:border-emerald-500 text-white font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors disabled:bg-zinc-200 disabled:text-zinc-400"
                                             x-text="isDirty ? 'Update This Month ●' : 'Update This Month'"></button>
                                         <button type="button" x-show="isLatest" @click="closeOut()" :disabled="offline"
-                                            class="w-full bg-white border border-zinc-300 hover:border-emerald-500 hover:text-emerald-700 text-zinc-600 font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors disabled:text-zinc-300 disabled:border-zinc-200">Close Out This Month</button>
+                                            class="w-full bg-white dark:bg-zinc-100 border border-zinc-300 dark:border-[#c7e0da]/20 hover:border-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-400/90 text-zinc-600 dark:text-[#c7e0da]/90 font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors disabled:text-zinc-300 disabled:border-zinc-200">Close Out This Month</button>
                                     </div>
                                 </template>
                                 <template x-if="readonly">
                                     <div class="bg-zinc-100 border border-zinc-200 rounded-md p-4 text-center">
                                         <p class="text-sm text-zinc-500 mb-3">This month is closed. Editing it will recompute every later month.</p>
                                         <button type="button" @click="unlock()" :disabled="offline"
-                                            class="bg-white border border-zinc-300 hover:border-amber-500 hover:text-amber-700 text-zinc-600 font-bold uppercase tracking-widest text-xs rounded-md px-4 py-2.5 cursor-pointer transition-colors disabled:text-zinc-300">Edit this month</button>
+                                            class="bg-white dark:bg-zinc-100 border border-zinc-300 hover:border-amber-500 hover:text-amber-700 dark:hover:text-amber-400 text-zinc-600 font-bold uppercase tracking-widest text-xs rounded-md px-4 py-2.5 cursor-pointer transition-colors disabled:text-zinc-300">Edit this month</button>
                                     </div>
                                 </template>
                                 <template x-if="isClosed && unlocked">
@@ -576,7 +580,7 @@
                                         <button type="button" @click="save()" :disabled="offline"
                                             class="w-full bg-amber-500 hover:bg-amber-400 border border-amber-500 hover:border-amber-400 text-white font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors disabled:bg-zinc-200 disabled:text-zinc-400">Save &amp; Recompute Forward</button>
                                         <button type="button" @click="cancelEditing()"
-                                            class="w-full bg-white border border-zinc-300 hover:border-zinc-500 hover:text-zinc-700 text-zinc-600 font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors disabled:text-zinc-300 disabled:border-zinc-200">Cancel editing</button>
+                                            class="w-full bg-white dark:bg-zinc-100 border border-zinc-300 hover:border-zinc-500 hover:text-zinc-700 text-zinc-600 font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors disabled:text-zinc-300 disabled:border-zinc-200">Cancel editing</button>
                                     </div>
                                 </template>
                                 <div class="mt-4 uppercase font-bold text-xs tracking-widest text-zinc-400 flex justify-between opacity-60"><span>Save <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+S</kbd></span><span>Undo <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+Z</kbd></span><span>Redo <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+Shift+Z</kbd></span></div>
@@ -598,27 +602,27 @@
             <div>
 
             <div class="flex items-center gap-2 mb-6">
-                <h2 class="text-lg font-black font-brand text-zinc-700 mr-4 select-none">Insights</h2>
+                <h2 class="text-lg font-black font-brand text-zinc-700 dark:text-[#c7e0da] mr-4 leading-[32px] select-none">Insights</h2>
                 <template x-for="r in [['12mo','Last 12 months'],['ytd','This year'],['all','All time']]" :key="r[0]">
                     <button type="button" @click="range = r[0]" x-text="r[1]"
-                        class="px-3 py-1.5 rounded-md text-sm font-semibold cursor-pointer transition-colors"
-                        :class="range === r[0] ? 'bg-emerald-600 text-white' : 'bg-white border border-zinc-200 text-zinc-500 hover:bg-zinc-100'"></button>
+                        class="px-3 py-1 rounded-md text-sm font-semibold cursor-pointer transition-colors border"
+                        :class="range === r[0] ? 'bg-emerald-600 border-emerald-600 text-white dark:bg-emerald-400/70 dark:text-[#1b1e25]' : 'bg-white dark:bg-zinc-100 border-zinc-200 text-zinc-500 hover:bg-zinc-100'"></button>
                 </template>
             </div>
 
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <template x-for="card in [['Avg monthly income', stats().avgIncome, 'text-emerald-600'], ['Avg monthly spend', stats().avgSpend, 'text-red-500'], ['Avg monthly net', stats().avgNet, stats().avgNet >= 0 ? 'text-emerald-600' : 'text-red-500'], ['Months in range', stats().months, 'text-zinc-700']]">
-                    <div class="bg-white rounded-lg border border-zinc-200 shadow-sm p-4">
+                <template x-for="card in [['Avg monthly income', stats().avgIncome, 'text-emerald-600 dark:text-emerald-400'], ['Avg monthly spend', stats().avgSpend, 'text-red-500 dark:text-red-400'], ['Avg monthly net', stats().avgNet, stats().avgNet >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'], ['Months in range', stats().months, 'text-zinc-700']]">
+                    <div class="bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm p-4">
                         <div class="text-[11px] uppercase tracking-widest font-bold text-zinc-400 select-none" x-text="card[0]"></div>
                         <div class="text-2xl font-black font-brand mt-1" :class="card[2]" x-text="card[0] === 'Months in range' ? card[1] : fmt(card[1])"></div>
                     </div>
                 </template>
             </div>
 
-            <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-4 mb-6">
+            <section class="bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm p-4 mb-6">
                 <div class="flex items-baseline justify-between mb-3">
                     <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 select-none">Savings over time &amp; projection</h3>
-                    <span x-show="projected12 !== null" class="text-xs font-semibold text-violet-600 select-none"
+                    <span x-show="projected12 !== null" class="text-xs font-semibold text-violet-600 dark:text-violet-400 select-none"
                         title="Linear trend of the selected timespan, projected forward"
                         x-text="'≈ ' + fmt(projected12) + ' in 12 months at the current trend'"></span>
                 </div>
@@ -626,16 +630,16 @@
             </section>
 
             <div class="grid lg:grid-cols-2 gap-6 mb-6">
-                <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-4">
+                <section class="bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm p-4">
                     <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-3 select-none">Spend by tag</h3>
                     <!-- charts mount by id, not x-ref: $refs go stale across x-if re-creation -->
                     <div id="insights-chart-donut"></div>
                     <p x-show="!tagRows().length" class="text-center text-zinc-400 text-sm py-10">
-                        No spending in this range yet. Tag fields with the <span class="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded inline-flex items-center align-middle"><svg class="w-3 h-3"><use href="#i-tag"/></svg></span> button -
+                        No spending in this range yet. Tag fields with the <span class="bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded inline-flex items-center align-middle"><svg class="w-3 h-3"><use href="#i-tag"/></svg></span> button -
                         tagging a budget also covers the expenses that draw from it.
                     </p>
                 </section>
-                <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-4">
+                <section class="bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm p-4">
                     <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-3 select-none">Monthly spend, top tags</h3>
                     <div id="insights-chart-bar"></div>
                 </section>
@@ -644,7 +648,7 @@
             <!-- income streams: only rendered content when tagged income
                  exists in range - untagged income gets no insights -->
             <div id="insights-income-block" x-show="incomeRows().length" class="grid lg:grid-cols-2 gap-6 mb-6">
-                <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-4">
+                <section class="bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm p-4">
                     <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-3 select-none">Income by tag</h3>
                     <div id="insights-chart-income-donut"></div>
                     <table class="w-full text-sm mt-3">
@@ -659,7 +663,7 @@
                         <tbody>
                             <template x-for="row in incomeRows()" :key="row.tag">
                                 <tr class="border-t border-zinc-100">
-                                    <td class="py-1.5"><span class="bg-emerald-100 text-emerald-700 text-[11px] px-2 py-0.5 rounded-full" x-text="row.tag"></span></td>
+                                    <td class="py-1.5"><span class="bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 text-[11px] px-2 py-0.5 rounded-full" x-text="row.tag"></span></td>
                                     <td class="py-1.5 text-right font-semibold" x-text="fmt(row.total)"></td>
                                     <td class="py-1.5 text-right text-zinc-500" x-text="fmt(row.avg)"></td>
                                     <td class="py-1.5 text-right text-zinc-400" x-text="row.pct + '%'"></td>
@@ -668,14 +672,14 @@
                         </tbody>
                     </table>
                 </section>
-                <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-4">
+                <section class="bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm p-4">
                     <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-3 select-none">Income streams over time</h3>
                     <div id="insights-chart-income-bar"></div>
                 </section>
             </div>
 
             <div class="grid lg:grid-cols-2 gap-6">
-                <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-4">
+                <section class="bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm p-4">
                     <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-3 select-none">Tag breakdown</h3>
                     <table class="w-full text-sm">
                         <thead>
@@ -689,7 +693,7 @@
                         <tbody>
                             <template x-for="row in tagRows()" :key="row.tag">
                                 <tr class="border-t border-zinc-100">
-                                    <td class="py-1.5"><span class="bg-emerald-100 text-emerald-700 text-[11px] px-2 py-0.5 rounded-full" x-text="row.tag"></span></td>
+                                    <td class="py-1.5"><span class="bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 text-[11px] px-2 py-0.5 rounded-full" x-text="row.tag"></span></td>
                                     <td class="py-1.5 text-right font-semibold" x-text="fmt(row.total)"></td>
                                     <td class="py-1.5 text-right text-zinc-500" x-text="fmt(row.avg)"></td>
                                     <td class="py-1.5 text-right text-zinc-400" x-text="row.pct + '%'"></td>
@@ -700,17 +704,17 @@
                     </table>
                 </section>
 
-                <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-4">
+                <section class="bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm p-4">
                     <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-3 select-none">Envelope health (latest month)</h3>
                     <div class="space-y-3">
                         <template x-for="env in envelopes()" :key="env.label + env.kind">
                             <div>
                                 <div class="flex justify-between text-sm mb-1">
                                     <span class="font-semibold text-zinc-700" x-text="env.label"></span>
-                                    <span :class="env.left < 0 ? 'text-red-600 font-bold' : 'text-zinc-500'"
+                                    <span :class="env.left < 0 ? 'text-red-600 dark:text-red-400 font-bold' : 'text-zinc-500'"
                                         x-text="fmt(env.spent) + ' spent of ' + fmt(env.avail)"></span>
                                 </div>
-                                <div class="w-full bg-zinc-100 rounded-full h-2 overflow-hidden">
+                                <div class="w-full bg-zinc-100 dark:bg-zinc-200 rounded-full h-2 overflow-hidden">
                                     <div class="h-full rounded-full" :class="env.left < 0 ? 'bg-red-500' : (env.progress && env.progress.reached ? 'bg-amber-400' : 'bg-emerald-500')"
                                         :style="'width:' + Math.min(100, env.avail > 0 ? Math.round(env.spent / env.avail * 100) : (env.spent > 0 ? 100 : 0)) + '%'"></div>
                                 </div>
@@ -729,11 +733,11 @@
         <div x-data="settingsView(true)" x-show="$store.ui.view === 'settings'" @keydown.window="hotkeys($event)">
             <template x-if="$store.ui.view === 'settings'">
                 <div>
-                    <h2 class="text-lg font-black font-brand text-zinc-700 mb-6 select-none">Settings</h2>
+                    <h2 class="text-lg font-black font-brand text-zinc-700 dark:text-[#c7e0da] mb-6 leading-[32px] select-none">Settings</h2>
 
                     <div class="grid lg:grid-cols-2 gap-6 items-start">
                         <!-- groups -->
-                        <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-5">
+                        <section class="bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm p-5">
                             <template x-if="draft">
                                 <div class="flex items-center justify-between gap-4 mb-5 pb-5 border-b border-zinc-100">
                                     <div>
@@ -744,7 +748,7 @@
                                         <div class="relative shrink-0">
                                             <span class="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 text-xs select-none">$</span>
                                             <input type="number" x-model.number="draft.initialSavings"
-                                                class="w-32 border border-zinc-200 rounded pl-5 pr-1 py-1.5 text-sm text-right bg-zinc-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                                class="w-32 border border-zinc-200 rounded pl-5 pr-1 py-1.5 text-sm dark:text-[#c7e0da] text-right bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                                                 :class="initialUnlocked && 'ring-1 ring-amber-400'">
                                         </div>
                                     </template>
@@ -753,7 +757,7 @@
                                             <span class="text-sm font-semibold tabular-nums text-zinc-700 select-none"
                                                 title="Locked once you have more than one month of history" x-text="fmt(draft.initialSavings)"></span>
                                             <button type="button" @click="unlockInitial()"
-                                                class="text-xs border border-zinc-300 rounded px-2.5 py-1 text-zinc-500 hover:border-amber-500 hover:text-amber-700 cursor-pointer transition-colors">edit…</button>
+                                                class="text-xs border border-zinc-300 rounded px-2.5 py-1 text-zinc-500 hover:border-amber-500 hover:text-amber-700 dark:hover:text-amber-400 cursor-pointer transition-colors">edit…</button>
                                         </div>
                                     </template>
                                 </div>
@@ -768,14 +772,14 @@
                                         <div class="border border-zinc-200 rounded-md p-3 mb-2.5 bg-zinc-50">
                                             <div class="flex items-center gap-2">
                                                 <div class="flex flex-col shrink-0">
-                                                    <button type="button" @click="move(gi, -1)" class="text-zinc-300 hover:text-zinc-600 cursor-pointer leading-none text-xs" :class="gi === 0 && 'opacity-0 pointer-events-none'">▲</button>
-                                                    <button type="button" @click="move(gi, 1)" class="text-zinc-300 hover:text-zinc-600 cursor-pointer leading-none text-xs" :class="gi === draft.groups.length - 1 && 'opacity-0 pointer-events-none'">▼</button>
+                                                    <button type="button" @click="move(gi, -1)" class="text-zinc-300 hover:text-zinc-600 cursor-pointer leading-none text-xs mb-1" :class="gi === 0 && 'opacity-0 pointer-events-none'">▲</button>
+                                                    <button type="button" @click="move(gi, 1)" class="text-zinc-300 hover:text-zinc-600 cursor-pointer leading-none text-xs mt-1" :class="gi === draft.groups.length - 1 && 'opacity-0 pointer-events-none'">▼</button>
                                                 </div>
                                                 <input type="text" x-model="group.title"
-                                                    class="flex-1 min-w-0 border border-zinc-200 rounded px-2.5 py-1.5 text-sm font-semibold bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                                                <span class="text-xs text-zinc-400 shrink-0 select-none" x-text="kindLabel(group.kind)"></span>
+                                                    class="flex-1 min-w-0 max-w-[calc(100%-177px)] border border-zinc-200 rounded px-2.5 py-1.5 text-sm dark:text-[#c7e0da] font-semibold bg-white dark:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                                <span class="text-xs text-zinc-400 shrink-0 min-w-28 select-none" x-text="kindLabel(group.kind)"></span>
                                                 <button type="button" @click="removeGroup(group)" title="Remove group"
-                                                    class="w-7 h-7 shrink-0 rounded flex items-center justify-center cursor-pointer bg-white border border-zinc-200 text-zinc-400 hover:bg-red-100 hover:text-red-600 transition-colors"><svg class="w-3.5 h-3.5"><use href="#i-xmark"/></svg></button>
+                                                    class="w-7 h-7 shrink-0 rounded flex items-center justify-center cursor-pointer bg-white dark:bg-zinc-100 border border-zinc-200 text-zinc-400 hover:bg-red-100 dark:hover:bg-red-500/15 hover:text-red-600 dark:hover:text-red-400 transition-colors"><svg class="w-3.5 h-3.5"><use href="#i-xmark"/></svg></button>
                                             </div>
                                             <label x-show="group.kind === 'envelope'" class="flex items-center gap-2 mt-2.5 ml-6 cursor-pointer select-none">
                                                 <input type="checkbox" x-model="group.strictOverspend" class="accent-emerald-600">
@@ -787,13 +791,13 @@
                                     <div class="flex flex-wrap gap-2 mt-4">
                                         <template x-for="k in [['income','+ Income'],['envelope','+ Envelope budgets'],['goal','+ Goal budgets'],['expense','+ Expenses']]" :key="k[0]">
                                             <button type="button" @click="addGroup(k[0])" x-text="k[1]"
-                                                class="text-xs border border-dashed border-zinc-300 hover:border-emerald-400 hover:text-emerald-700 text-zinc-500 rounded-md px-3 py-1.5 cursor-pointer transition-colors"></button>
+                                                class="text-xs border border-dashed border-zinc-300 hover:border-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-400 text-zinc-500 rounded-md px-3 py-1.5 cursor-pointer transition-colors"></button>
                                         </template>
                                     </div>
 
                                     <div class="mt-5 flex items-center gap-3">
                                         <button type="button" @click="save()" :disabled="!dirty || $store.ui.offline"
-                                            class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold uppercase tracking-widest text-xs rounded-md px-5 py-2.5 cursor-pointer transition-colors disabled:bg-zinc-200 disabled:text-zinc-400 disabled:cursor-default">Save settings</button>
+                                            class="hover:bg-emerald-500 text-white dark:bg-emerald-400/70 dark:text-[#1b1e25] font-bold uppercase tracking-widest text-xs rounded-md px-5 py-2.5 cursor-pointer transition-colors disabled:bg-zinc-200 dark:disabled:bg-zinc-200 disabled:text-zinc-400 disabled:cursor-default">Save settings</button>
                                         <button type="button" x-show="dirty" @click="reset()"
                                             class="text-xs text-zinc-400 hover:text-zinc-600 cursor-pointer">discard changes</button>
                                     </div>
@@ -807,8 +811,22 @@
                              flex gap (not space-y) so the gap collapses when the access
                              pane is display:none in web mode. -->
                         <div class="flex flex-col gap-6">
+                            <!-- appearance: per-device theme (localStorage, via window.Theme) -->
+                            <section class="bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm p-5" x-data="{ theme: window.Theme.get() }">
+                                <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-1 select-none">Appearance</h3>
+                                <p class="text-xs text-zinc-400 mb-4 leading-relaxed">Pick a colour theme for this device. <span class="font-semibold">System</span> follows your device’s light or dark setting.</p>
+                                <div class="inline-flex rounded-md border border-zinc-300 overflow-hidden select-none">
+                                    <template x-for="opt in [['system','System'],['light','Light'],['dark','Dark']]" :key="opt[0]">
+                                        <button type="button" @click="theme = opt[0]; window.Theme.set(opt[0])"
+                                            class="px-4 py-1.5 text-xs font-semibold cursor-pointer transition-colors border-l border-zinc-300 first-of-type:border-l-0"
+                                            :class="theme === opt[0] ? 'bg-emerald-600 dark:bg-emerald-400/70 text-white dark:text-[#1b1e25]' : 'text-zinc-500 hover:bg-zinc-100'"
+                                            x-text="opt[1]"></button>
+                                    </template>
+                                </div>
+                            </section>
+
                             <!-- data management -->
-                            <section class="bg-white rounded-lg border border-zinc-200 shadow-sm p-5">
+                            <section class="bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm p-5">
                                 <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-4 select-none">Data</h3>
 
                                 <div class="text-xs text-zinc-500 mb-4 break-all">
@@ -818,10 +836,10 @@
                                 </div>
 
                                 <div class="flex flex-wrap gap-2">
-                                    <button type="button" @click="changeLocation()" class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors">Move / share database…</button>
-                                    <button type="button" @click="exportDb()" class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors">Export a copy…</button>
+                                    <button x-show="!isWeb" type="button" @click="changeLocation()" class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors">Move / share database…</button>
+                                    <button x-show="!isWeb" type="button" @click="exportDb()" class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors">Export a copy…</button>
                                     <button type="button" @click="loadBackups()" class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors">Backups…</button>
-                                    <button type="button" @click="importLegacy()" class="text-xs border border-amber-300 text-amber-700 hover:bg-amber-50 rounded-md px-3 py-2 cursor-pointer transition-colors">Import legacy data…</button>
+                                    <button type="button" @click="importLegacy()" class="text-xs border border-amber-300 dark:border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 rounded-md px-3 py-2 cursor-pointer transition-colors">Import legacy data…</button>
                                 </div>
 
                                 <p class="text-[11px] text-zinc-400 mt-4 leading-relaxed">
@@ -847,12 +865,12 @@
                                     </div>
 
                                     <!-- an update exists -->
-                                    <div x-show="$store.data.update.available" class="mt-3 flex flex-wrap items-center gap-2 rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2">
-                                        <span class="text-xs text-emerald-800 select-none">
+                                    <div x-show="$store.data.update.available" class="mt-3 flex flex-wrap items-center gap-2 rounded-md bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 px-3 py-2">
+                                        <span class="text-xs text-emerald-800 dark:text-emerald-300 select-none">
                                             Version <span class="font-semibold" x-text="$store.data.update.latest"></span> is available.
                                         </span>
                                         <button type="button" @click="openReleases()"
-                                            class="text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded px-2.5 py-1 cursor-pointer transition-colors">Release notes</button>
+                                            class="text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white dark:text-[#1b1e25] rounded px-2.5 py-1 cursor-pointer transition-colors">Release notes</button>
                                     </div>
 
                                     <!-- up to date / offline / off: quiet one-liners -->
@@ -865,14 +883,14 @@
                                     </p>
                                 </div>
 
-                                <div class="text-[11px] text-zinc-400 mt-4 pt-4 border-t border-zinc-100 select-none"
+                                <div class="text-[11px] text-zinc-400 mt-4 pt-4.5 border-t border-zinc-100 dark:border-[#c7e0da]/10 select-none"
                                     title="Application version - if this is older than your latest install, the window is running stale code">
-                                    Spend Wise · v<span class="font-semibold" x-text="$store.data.version || 'dev'"></span> · by Michael Niles
+                                    <span class="font-brand text-sm inline-block -mb-1">Spend Wise</span> v<span class="font-semibold" x-text="$store.data.version || 'dev'"></span> · by Michael Niles
                                 </div>
                             </section>
 
                             <!-- privacy & access -->
-                            <section x-show="!isWeb" class="bg-white rounded-lg border border-zinc-200 shadow-sm p-5">
+                            <section x-show="!isWeb" class="bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm p-5">
                                 <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-1 select-none">App password</h3>
                                 <p class="text-xs text-zinc-400 mb-4 leading-relaxed">
                                     Locks the app on launch - casual privacy on a shared computer - and is the login for web
@@ -883,23 +901,23 @@
                                     <label x-show="hasPassword" class="block">
                                         <span class="text-[10px] uppercase tracking-widest font-bold text-zinc-400 block mb-1 select-none">Current</span>
                                         <input type="password" x-model="pwCurrent" autocomplete="current-password"
-                                            class="w-36 border border-zinc-200 rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                            class="w-36 border border-zinc-200 rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
                                     </label>
                                     <label class="block">
                                         <span class="text-[10px] uppercase tracking-widest font-bold text-zinc-400 block mb-1 select-none" x-text="hasPassword ? 'New' : 'Password'"></span>
                                         <input type="password" x-model="pwNew" autocomplete="new-password"
-                                            class="w-36 border border-zinc-200 rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                            class="w-36 border border-zinc-200 rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
                                     </label>
                                     <label class="block">
                                         <span class="text-[10px] uppercase tracking-widest font-bold text-zinc-400 block mb-1 select-none">Confirm</span>
                                         <input type="password" x-model="pwConfirm" autocomplete="new-password" @keydown.enter="setPassword()"
-                                            class="w-36 border border-zinc-200 rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                            class="w-36 border border-zinc-200 rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
                                     </label>
                                     <button type="button" @click="setPassword()"
                                         class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors"
                                         x-text="hasPassword ? 'Change password' : 'Set password'"></button>
                                     <button type="button" x-show="hasPassword" @click="removePassword()"
-                                        class="text-xs border border-red-200 text-red-600 hover:bg-red-50 rounded-md px-3 py-2 cursor-pointer transition-colors">Remove…</button>
+                                        class="text-xs border border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-md px-3 py-2 cursor-pointer transition-colors">Remove…</button>
                                 </div>
 
                                 <template x-if="web.loaded">
@@ -914,14 +932,14 @@
                                         <div class="flex flex-wrap items-center gap-3">
                                             <button type="button" @click="toggleWeb()"
                                                 class="text-xs font-bold rounded-md px-4 py-2 cursor-pointer transition-colors"
-                                                :class="web.enabled ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'border border-zinc-300 hover:bg-zinc-100 text-zinc-600'"
+                                                :class="web.enabled ? 'hover:bg-emerald-500 text-white dark:text-[#1b1e25]' : 'border border-zinc-300 hover:bg-zinc-100 text-zinc-600'"
                                                 x-text="web.enabled ? 'Web access: on' : 'Turn on web access'"></button>
                                             <label class="flex items-center gap-1.5 text-xs text-zinc-500">
                                                 port
                                                 <input type="number" min="1024" max="65535" x-model.number="web.port" @change="applyWebPort()"
-                                                    class="w-20 border border-zinc-200 rounded px-2 py-1.5 text-sm text-right bg-zinc-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                                    class="w-20 border border-zinc-200 rounded px-2 py-1.5 text-sm text-right bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
                                             </label>
-                                            <span x-show="web.enabled && web.running" class="text-[10px] uppercase tracking-widest font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 select-none">serving</span>
+                                            <span x-show="web.enabled && web.running" class="text-[10px] uppercase tracking-widest font-bold px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 select-none">serving</span>
                                         </div>
                                         <div x-show="web.running" class="mt-3 text-xs text-zinc-500 space-y-0.5">
                                             <template x-for="url in web.urls" :key="url">
@@ -941,11 +959,11 @@
                                                 <label class="flex items-center gap-1.5 text-xs text-zinc-500 pl-3">
                                                     trusted proxies in front
                                                     <input type="number" min="0" max="10" x-model.number="web.trustProxy" @change="applyWebProxy()"
-                                                        class="w-16 border border-zinc-200 rounded px-2 py-1.5 text-sm text-right bg-zinc-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                                        class="w-16 border border-zinc-200 rounded px-2 py-1.5 text-sm text-right bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
                                                 </label>
                                                 <label class="flex items-center gap-2 text-xs text-zinc-500 pl-3 cursor-pointer">
                                                     <input type="checkbox" x-model="web.secureCookie" @change="applyWebProxy()"
-                                                        class="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500">
+                                                        class="rounded border-zinc-300 text-emerald-600 dark:text-emerald-400 focus:ring-emerald-500">
                                                     force Secure cookies (auto-detected from the proxy when hops &gt; 0)
                                                 </label>
                                             </div>
@@ -986,7 +1004,7 @@
             </div>
             <div class="mt-5 text-right">
                 <button type="button" @click="$store.ui.modals.recompute = false"
-                    class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold uppercase tracking-widest text-xs rounded-md px-5 py-2.5 cursor-pointer transition-colors">Got it</button>
+                    class="hover:bg-emerald-500 text-white dark:text-[#1b1e25] font-bold uppercase tracking-widest text-xs rounded-md px-5 py-2.5 cursor-pointer transition-colors">Got it</button>
             </div>
         </x-modal>
 
@@ -1000,7 +1018,7 @@
                         <div class="flex items-center justify-between gap-3 border border-zinc-200 rounded-md px-3 py-2 bg-zinc-50">
                             <span class="text-sm font-semibold text-zinc-700 truncate" x-text="g.title"></span>
                             <select x-model="g.kind"
-                                class="shrink-0 text-xs border border-zinc-200 rounded py-1.5 px-1 bg-white cursor-pointer focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                class="shrink-0 text-xs border border-zinc-200 rounded py-1.5 px-1 bg-white dark:bg-zinc-100 cursor-pointer focus:outline-none focus:ring-1 focus:ring-emerald-500">
                                 <option value="income">Income (+)</option>
                                 <option value="expense">Expenses (−)</option>
                                 <option value="envelope">Envelope budgets (−)</option>
@@ -1013,7 +1031,7 @@
                     <button type="button" @click="$store.ui.modals.importMap = false"
                         class="bg-zinc-100 hover:bg-zinc-200 text-zinc-600 font-bold uppercase tracking-widest text-xs rounded-md px-4 py-2.5 cursor-pointer transition-colors">Cancel</button>
                     <button type="button" @click="runImport()"
-                        class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold uppercase tracking-widest text-xs rounded-md px-4 py-2.5 cursor-pointer transition-colors">Import</button>
+                        class="hover:bg-emerald-500 text-white dark:text-[#1b1e25] font-bold uppercase tracking-widest text-xs rounded-md px-4 py-2.5 cursor-pointer transition-colors">Import</button>
                 </div>
             </div>
         </x-modal>
@@ -1027,13 +1045,13 @@
                         <span x-text="FinEngine.keyLabel($store.ui.importSummary.firstMonth)"></span> through
                         <span x-text="FinEngine.keyLabel($store.ui.importSummary.lastMonth)"></span>.</p>
                     <p>Groups: <span x-text="$store.ui.importSummary.groups.join(', ')"></span></p>
-                    <p x-show="$store.ui.importSummary.warnings.length" class="text-amber-600 text-xs"
+                    <p x-show="$store.ui.importSummary.warnings.length" class="text-amber-600 dark:text-amber-400 text-xs"
                         x-text="$store.ui.importSummary.warnings.join('; ')"></p>
                 </div>
             </template>
             <div class="mt-5 text-right">
                 <button type="button" @click="$store.ui.modals.importSummary = false"
-                    class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold uppercase tracking-widest text-xs rounded-md px-5 py-2.5 cursor-pointer transition-colors">Nice</button>
+                    class="hover:bg-emerald-500 text-white dark:text-[#1b1e25] font-bold uppercase tracking-widest text-xs rounded-md px-5 py-2.5 cursor-pointer transition-colors">Nice</button>
             </div>
         </x-modal>
 
@@ -1050,13 +1068,13 @@
                                 <div class="text-[11px] text-zinc-400" x-text="new Date(b.mtime).toLocaleString() + ' · ' + Math.round(b.size / 1024) + ' KB'"></div>
                             </div>
                             <button type="button" @click="restoreBackup(b)"
-                                class="text-[11px] shrink-0 border border-zinc-300 hover:border-amber-500 hover:text-amber-700 text-zinc-500 rounded px-2.5 py-1.5 cursor-pointer transition-colors">Restore</button>
+                                class="text-[11px] shrink-0 border border-zinc-300 hover:border-amber-500 hover:text-amber-700 dark:hover:text-amber-400 text-zinc-500 rounded px-2.5 py-1.5 cursor-pointer transition-colors">Restore</button>
                         </div>
                     </template>
                     <p x-show="!backups.length" class="text-center text-zinc-400 text-sm py-6">No backups yet.</p>
                 </div>
-                <div class="mt-4 flex justify-between">
-                    <button type="button" @click="openBackupsFolder()" class="text-xs text-zinc-400 hover:text-zinc-600 cursor-pointer">open folder</button>
+                <div class="mt-4 flex" :class="isWeb ? 'justify-end' : 'justify-between'">
+                    <button type="button" x-show="!isWeb" @click="openBackupsFolder()" class="text-xs text-zinc-400 hover:text-zinc-600 cursor-pointer">open folder</button>
                     <button type="button" @click="$store.ui.modals.backups = false"
                         class="bg-zinc-200 hover:bg-zinc-300 text-zinc-600 font-bold uppercase tracking-widest text-xs rounded-md px-5 py-2.5 cursor-pointer transition-colors">Close</button>
                 </div>
@@ -1067,10 +1085,10 @@
         <div x-show="$store.ui.confirm.open" x-transition.opacity.duration.150ms
             class="fixed inset-0 z-50 flex items-center justify-center"
             @keydown.escape.window="$store.ui.confirm.resolve && $store.ui.confirm.resolve(false)">
-            <div class="absolute inset-0 bg-zinc-900/50 backdrop-blur-[2px] cursor-pointer"
+            <div class="absolute inset-0 bg-zinc-900/50 dark:bg-black/60 backdrop-blur-[2px] cursor-pointer"
                 @click="$store.ui.confirm.resolve && $store.ui.confirm.resolve(false)"></div>
-            <div class="relative bg-white rounded-xl shadow-2xl p-7 mx-4 w-full max-w-lg">
-                <h2 class="text-base font-black font-brand text-zinc-800 mb-2" x-text="$store.ui.confirm.title"></h2>
+            <div class="relative bg-white dark:bg-zinc-100 rounded-xl shadow-2xl p-7 mx-4 w-full max-w-lg">
+                <h2 class="text-xl font-black font-brand text-zinc-800 mb-2" x-text="$store.ui.confirm.title"></h2>
                 <p class="text-sm text-zinc-500 leading-relaxed" x-text="$store.ui.confirm.body"></p>
                 <div class="mt-6 flex justify-end gap-2 flex-wrap">
                     <button type="button" @click="$store.ui.confirm.resolve && $store.ui.confirm.resolve(false)"
@@ -1082,7 +1100,7 @@
                         x-text="$store.ui.confirm.altText"></button>
                     <button type="button" @click="$store.ui.confirm.resolve && $store.ui.confirm.resolve(true)"
                         class="text-white font-bold uppercase tracking-widest text-xs rounded-md px-4 py-2.5 cursor-pointer transition-colors"
-                        :class="$store.ui.confirm.danger && !$store.ui.confirm.altText ? 'bg-red-600 hover:bg-red-500' : 'bg-emerald-600 hover:bg-emerald-500'"
+                        :class="$store.ui.confirm.danger && !$store.ui.confirm.altText ? 'bg-red-600 hover:bg-red-500' : 'bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-400/70 dark:text-[#1b1e25]'"
                         x-text="$store.ui.confirm.confirmText"></button>
                 </div>
             </div>
@@ -1092,7 +1110,7 @@
         <div x-show="$store.ui.toast.show" @click="$store.ui.toast.show = false"
             x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-3" x-transition:enter-end="opacity-100 translate-y-0"
             x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
-            class="fixed bottom-7 left-1/2 -translate-x-1/2 z-[60] bg-white rounded-lg shadow-xl border border-zinc-200 flex items-stretch overflow-hidden cursor-pointer max-w-md w-full mx-4">
+            class="fixed bottom-7 left-1/2 -translate-x-1/2 z-[60] bg-white dark:bg-zinc-100 rounded-lg shadow-xl border border-zinc-200 flex items-stretch overflow-hidden cursor-pointer max-w-md w-full mx-4">
             <div class="w-1.5 shrink-0"
                 :class="{ 'bg-sky-500': $store.ui.toast.type === 'info', 'bg-emerald-500': $store.ui.toast.type === 'success', 'bg-red-500': $store.ui.toast.type === 'error' }"></div>
             <div class="px-4 py-3 text-sm text-zinc-700" x-text="$store.ui.toast.message"></div>
@@ -1113,8 +1131,8 @@
         x-show="$store.ui.modals[toggle]" x-transition.opacity.duration.150ms
         class="fixed inset-0 z-40 flex items-center justify-center"
         @keydown.escape.window="$store.ui.modals[toggle] = false">
-        <div class="absolute inset-0 bg-zinc-900/50 backdrop-blur-[2px] cursor-pointer" @click="$store.ui.modals[toggle] = false"></div>
-        <div class="relative bg-white rounded-xl shadow-2xl max-h-[88vh] overflow-y-auto p-8 mx-4 w-full" :class="boolAttr(wide) ? 'max-w-2xl' : 'max-w-xl'">
+        <div class="absolute inset-0 bg-zinc-900/50 dark:bg-black/60 backdrop-blur-[2px] cursor-pointer" @click="$store.ui.modals[toggle] = false"></div>
+        <div class="relative bg-white dark:bg-zinc-100 rounded-xl shadow-2xl max-h-[88vh] overflow-y-auto p-8 mx-4 w-full" :class="boolAttr(wide) ? 'max-w-2xl' : 'max-w-xl'">
             <slot></slot>
         </div>
     </div>

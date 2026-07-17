@@ -235,10 +235,10 @@ function monthView () {
 
         groupHint (kind) {
             return {
-                income: 'All income for the month. 📌 Pin recurring sources so they carry forward.',
-                envelope: 'Little savings accounts: “monthly” is added at each close-out. Spending flows in automatically from expense rows assigned to the envelope. Use ％ to auto-fund from a percentage of other groups.',
-                goal: 'Envelope budgets with a cap - ideal for recurring bills. Use 🕓 to set a due date and the monthly deposit is calculated for you and re-spread each cycle.',
-                expense: 'Monthly or one-time expenses. 📌 Pin recurring ones. Assign one to an envelope and it spends from that envelope’s balance instead.',
+                income: 'All income for the month. <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75"><svg class="w-3.5 h-3.5 inline-block -mt-1"><use href="#i-pin"/></svg></kbd> Pin recurring sources so they carry forward.',
+                envelope: 'Little savings accounts: Spending flows in automatically from expense rows assigned to the envelope. Use <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75"><svg class="w-3.5 h-3.5 inline-block -mt-1"><use href="#i-percent"/></svg></kbd> to auto-fund from a percentage of other groups.',
+                goal: 'Envelope budgets with a cap - ideal for recurring bills. Use <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75"><svg class="w-3.5 h-3.5 inline-block -mt-1"><use href="#i-clock"/></svg></kbd> to set a due date and the monthly deposit is calculated for you and re-spread each cycle.',
+                expense: 'Monthly or one-time expenses. <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75"><svg class="w-3.5 h-3.5 inline-block -mt-1"><use href="#i-pin"/></svg></kbd> Pin recurring ones. Assign one to an envelope and it spends from that envelope’s balance instead.',
             }[kind] || '';
         },
 

@@ -32,7 +32,7 @@ carries forward on rollover and the derived value is materialized at save.
   flattered. Sums accumulate in integer cents before rounding; summing floats
   and rounding after lets `10.00 + 20.00` reach `30.000000000000004` and ceil
   to 31.
-- **Pin (🖈)** an income or expense field to carry it into future months; **✓**
+- **Pin (📌)** an income or expense field to carry it into future months; **✓**
   marks paid/received. Budgets have no pin - they're standing accounts and
   always carry forward. Retiring one is a delete (Empty it first to return the
   balance). Rollover ignores `pinned` on envelope/goal fields, so legacy imports

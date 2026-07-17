@@ -57,33 +57,66 @@ const LOGIN_PAGE = `<!doctype html>
   }
   body { font-family: system-ui, sans-serif; background: #f4f4f5; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
   form { background: #fff; border: 1px solid #e4e4e7; border-radius: 12px; box-shadow: 0 10px 15px -3px rgb(0 0 0 / .07); padding: 2rem; width: 20rem; text-align: center; box-sizing: border-box; }
-  h1 { font-family: 'Roca', system-ui, sans-serif; font-weight: 900; color: #047857; font-size: 1.35rem; margin: 0 0 1rem; }
+  img.logo { display: block; width: 2.5rem; height: 2.5rem; margin: 0 auto .5rem; }
+  h1 { font-family: 'Roca', system-ui, sans-serif; font-weight: 900; color: #047857; font-size: 1.125rem; margin: 0 0 1rem; }
   input { width: 100%; box-sizing: border-box; border: 1px solid #d4d4d8; border-radius: 6px; padding: .55rem .75rem; font-size: .9rem; text-align: center; outline: none; }
   input:focus { border-color: #10b981; box-shadow: 0 0 0 1px #10b981; }
   button { margin-top: .75rem; width: 100%; background: #059669; color: #fff; border: 0; border-radius: 6px; padding: .6rem; font-weight: 700; font-size: .9rem; cursor: pointer; }
   button:hover { background: #10b981; }
   p.err { color: #dc2626; font-size: .8rem; min-height: 1rem; margin: .6rem 0 0; }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+    20%, 40%, 60%, 80% { transform: translateX(5px); }
+  }
+  form.shake { animation: shake 0.5s ease; }
+  /* the sign-in page is pre-auth, so it has no theme toggle - it follows the
+     OS. Colours mirror the app's dark palette (src/renderer/css/input.css). */
+  @media (prefers-color-scheme: dark) {
+    body { background: #1b1e25; }
+    form { background: #262a33; border-color: #333843; box-shadow: 0 10px 15px -3px rgb(0 0 0 / .4); }
+    h1 { color: #34d399; }
+    input { background: #1b1e25; border-color: #464c59; color: #e8eaef; }
+    input:focus { border-color: #10b981; box-shadow: 0 0 0 1px #10b981; }
+    p.err { color: #f87171; }
+  }
 </style></head><body>
 <form id="f">
+  <img class="logo" src="/renderer/assets/icon.ico" alt="" draggable="false">
   <h1>Spend Wise</h1>
   <input id="pw" type="password" placeholder="App password" autofocus autocomplete="current-password">
-  <button type="submit">Sign in</button>
+  <button type="submit">Unlock</button>
   <p class="err" id="err"></p>
 </form>
 <script>
-document.getElementById('f').addEventListener('submit', async (e) => {
+const form = document.getElementById('f');
+form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ password: document.getElementById('pw').value }) });
   const out = await res.json();
   if (out.ok) location.reload();
-  else { document.getElementById('err').textContent = out.error || 'Wrong password'; document.getElementById('pw').value = ''; }
+  else {
+    document.getElementById('err').textContent = out.error || 'Wrong password';
+    document.getElementById('pw').value = '';
+    form.classList.remove('shake');
+    void form.offsetWidth; // reflow so the animation restarts on repeat failures
+    form.classList.add('shake');
+  }
 });
 </script></body></html>`;
 
-const NO_PASSWORD_PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Spend Wise</title></head>
-<body style="font-family: system-ui, sans-serif; text-align:center; padding-top:4rem; color:#3f3f46">
-<h2 style="color:#047857">Spend Wise</h2>
+const NO_PASSWORD_PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Spend Wise</title>
+<style>
+  body { font-family: system-ui, sans-serif; text-align:center; padding-top:4rem; color:#3f3f46; background:#fff; }
+  h2 { color:#047857; }
+  @media (prefers-color-scheme: dark) {
+    body { background:#1b1e25; color:#c4c9d2; }
+    h2 { color:#34d399; }
+  }
+</style></head>
+<body>
+<h2>Spend Wise</h2>
 <p>Web access needs an app password.<br>Set one in the desktop app under Settings → App password.</p>
 </body></html>`;
 

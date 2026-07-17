@@ -103,8 +103,23 @@ const Charts = {
         return this._render(id, el, options);
     },
 
+    /**
+     * Fold the current theme into a chart's options at render. theme.mode
+     * carries the tooltip/data-label palette and a transparent background lets
+     * the card show through; the axis-label and grid COLOURS are handled in CSS
+     * (input.css) instead, keyed on html.dark - that repaints instantly when the
+     * theme flips under an already-rendered chart, which updateOptions() can't.
+     */
+    _applyTheme (options) {
+        const dark = !!(window.Theme && window.Theme.resolved() === 'dark');
+        options.theme = { ...(options.theme || {}), mode: dark ? 'dark' : 'light' };
+        options.chart = { ...(options.chart || {}), background: 'transparent' };
+        return options;
+    },
+
     _render (id, el, options) {
         if (!el) return null;
+        this._applyTheme(options);
         // destroy + clear + create: updateOptions() does not reliably apply
         // changed label sets (donut legends stick), so a fresh instance it is
         this.destroy(id);
