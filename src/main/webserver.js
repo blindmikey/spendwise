@@ -63,6 +63,7 @@ const LOGIN_PAGE = `<!doctype html>
   input:focus { border-color: #10b981; box-shadow: 0 0 0 1px #10b981; }
   button { margin-top: .75rem; width: 100%; background: #059669; color: #fff; border: 0; border-radius: 6px; padding: .6rem; font-weight: 700; font-size: .9rem; cursor: pointer; }
   button:hover { background: #10b981; }
+  .hidden { display: none; }
   p.err { color: #dc2626; font-size: .8rem; min-height: 1rem; margin: .6rem 0 0; }
   @keyframes shake {
     0%, 100% { transform: translateX(0); }
@@ -75,7 +76,7 @@ const LOGIN_PAGE = `<!doctype html>
   @media (prefers-color-scheme: dark) {
     body { background: #1b1e25; }
     form { background: #262a33; border-color: #333843; box-shadow: 0 10px 15px -3px rgb(0 0 0 / .4); }
-    h1 { color: #34d399; }
+    h1 { color: #c7e0da; }
     input { background: #1b1e25; border-color: #464c59; color: #e8eaef; }
     input:focus { border-color: #10b981; box-shadow: 0 0 0 1px #10b981; }
     p.err { color: #f87171; }
@@ -86,7 +87,7 @@ const LOGIN_PAGE = `<!doctype html>
   <h1>Spend Wise</h1>
   <input id="pw" type="password" placeholder="App password" autofocus autocomplete="current-password">
   <button type="submit">Unlock</button>
-  <p class="err" id="err"></p>
+  <p class="err hidden" id="err"></p>
 </form>
 <script>
 const form = document.getElementById('f');
@@ -97,6 +98,7 @@ form.addEventListener('submit', async (e) => {
   const out = await res.json();
   if (out.ok) location.reload();
   else {
+    document.getElementById('err').classList.remove('hidden');
     document.getElementById('err').textContent = out.error || 'Wrong password';
     document.getElementById('pw').value = '';
     form.classList.remove('shake');
@@ -109,14 +111,14 @@ form.addEventListener('submit', async (e) => {
 const NO_PASSWORD_PAGE = `<!doctype html><html><head><meta charset="utf-8"><title>Spend Wise</title>
 <style>
   body { font-family: system-ui, sans-serif; text-align:center; padding-top:4rem; color:#3f3f46; background:#fff; }
-  h2 { color:#047857; }
+  h1 { color:#047857; font-size: 1.125rem }
   @media (prefers-color-scheme: dark) {
     body { background:#1b1e25; color:#c4c9d2; }
-    h2 { color:#34d399; }
+    h1 { color:#c7e0da; }
   }
 </style></head>
 <body>
-<h2>Spend Wise</h2>
+<h1>Spend Wise</h1>
 <p>Web access needs an app password.<br>Set one in the desktop app under Settings → App password.</p>
 </body></html>`;
 
@@ -140,7 +142,12 @@ export function createWebServer (ctx, core, opts = {}) {
     let server = null;
     let port = null;
 
-    const hasPassword = () => !!(ctx.db.data && ctx.db.data.settings && ctx.db.data.settings.auth);
+    // ctx.authOverride: session-only hash from the CLI's --password flag, for
+    // local testing - takes precedence over the stored password and is never
+    // written to the db
+    const authHash = () => ctx.authOverride
+        || (ctx.db.data && ctx.db.data.settings && ctx.db.data.settings.auth);
+    const hasPassword = () => !!authHash();
 
     const parseCookies = (req) => Object.fromEntries((req.headers.cookie || '').split(';')
         .map((c) => c.trim().split('=')).filter((kv) => kv.length === 2));
@@ -200,7 +207,7 @@ export function createWebServer (ctx, core, opts = {}) {
         }
         const { password } = await readBody(req);
         await new Promise((r) => setTimeout(r, 250)); // flat cost per attempt
-        if (!verifyPassword(password, ctx.db.data.settings.auth)) {
+        if (!verifyPassword(password, authHash())) {
             a.fails += 1;
             if (a.fails >= MAX_FAILS) { a.lockedUntil = Date.now() + LOCKOUT_MS; a.fails = 0; }
             attempts.set(ip, a);

@@ -60,6 +60,13 @@ function createWindow () {
     });
     win.removeMenu();
     guardClose(win);
+    // mouse back/forward buttons (Windows sends them as app-commands) walk the
+    // renderer's hash history - same behavior as a browser's back/forward
+    win.on('app-command', (e, cmd) => {
+        const nav = win.webContents.navigationHistory;
+        if (cmd === 'browser-backward' && nav.canGoBack()) nav.goBack();
+        if (cmd === 'browser-forward' && nav.canGoForward()) nav.goForward();
+    });
     win.loadFile(path.join(__dirname, '../renderer/index.html'));
     if (process.env.FINANCES_DEVTOOLS) win.webContents.openDevTools({ mode: 'detach' });
     if (process.env.FINANCES_LOG_CONSOLE) {

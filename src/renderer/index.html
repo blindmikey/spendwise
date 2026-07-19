@@ -58,18 +58,21 @@
 
     <!-- lock screen: casual privacy for shared computers (web logs in at the server) -->
     <template x-if="$store.ui.locked">
-        <div class="fixed inset-0 z-[100] bg-zinc-100 flex items-center justify-center" x-data="{ pw: '', busy: false, bad: false }">
+        <!-- mirrors the web sign-in page (webserver.js LOGIN_PAGE): ground
+             zinc-100/50, raised card, emerald-400 brand ink in dark, solid
+             emerald button - change one, change the other -->
+        <div class="fixed inset-0 z-[100] bg-zinc-100 dark:bg-zinc-50 flex items-center justify-center" x-data="{ pw: '', busy: false, bad: false }">
             <form class="bg-white dark:bg-zinc-100 border border-zinc-200 rounded-xl shadow-lg p-8 w-80 text-center" :class="bad && 'animate-shake'"
                 @submit.prevent="busy = true; bad = false; window.api.authVerify({ password: pw }).then((r) => {
                     busy = false;
                     if (r.ok && r.valid) { $store.ui.locked = false; } else { bad = true; pw = ''; }
                 })">
                 <img src="assets/icon.ico" alt="" class="h-10 w-10 mx-auto mb-2" draggable="false">
-                <h2 class="font-black font-brand text-lg text-emerald-700 dark:text-[#c7e0da] mb-4 select-none">Spend Wise</h2>
+                <h1 class="font-black font-brand text-lg text-emerald-700 dark:text-[#c7e0da] mb-4 select-none">Spend Wise</h1>
                 <input type="password" x-model="pw" placeholder="App password" x-init="$nextTick(() => $el.focus())"
-                    class="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm text-center focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                    class="w-full border border-zinc-300 dark:bg-zinc-50 rounded-md px-3 py-2 text-sm text-center focus:outline-none focus:ring-1 focus:ring-emerald-500">
                 <button type="submit" :disabled="busy || !pw"
-                    class="mt-3 w-full hover:bg-emerald-500 text-white dark:text-[#1b1e25] rounded-md py-2 text-sm font-bold cursor-pointer transition-colors disabled:bg-zinc-200 disabled:text-zinc-400">Unlock</button>
+                    class="mt-3 w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-md py-2 text-sm font-bold cursor-pointer transition-colors disabled:bg-zinc-200 disabled:text-zinc-400">Unlock</button>
                 <p x-show="bad" class="text-xs text-red-600 dark:text-red-400 mt-2">Wrong password</p>
             </form>
         </div>
@@ -144,12 +147,13 @@
         </div>
     </header>
 
-    <!-- offline (web clients only): every save needs the server, so the app
-         goes read-only rather than letting edits pile up with nowhere to go -->
+    <!-- offline (web clients only): editing continues locally; only the ops
+         that need the server right now (save, tags, close-out, unlock) pause.
+         On reconnect the save-time merge reconciles concurrent sessions. -->
     <div x-show="$store.ui.offline" x-cloak
         class="bg-amber-100 dark:bg-amber-500/15 border-b border-amber-300 dark:border-amber-500/30 text-amber-900 dark:text-amber-300 text-xs text-center py-2 px-4 sticky top-14 z-20 select-none">
-        <span class="font-bold">Offline</span> - can’t reach the server. Editing is paused until the connection
-        returns; anything you already typed is still here.
+        <span class="font-bold">Offline</span> - can’t reach the server. You can keep editing; saving re-enables
+        when the connection returns. Keep the app open - closing it loses unsaved edits.
     </div>
 
     <!-- hidden while a month change renders, so the "loading…" below shows through -->
@@ -175,7 +179,7 @@
                             <template x-for="group in month.groups" :key="group.groupId">
                                 <section class="mb-5 bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm overflow-hidden">
                                     <header @click="toggleCollapsed(group.groupId)"
-                                        class="flex justify-between items-center px-4 py-2.5 bg-emerald-600 dark:bg-emerald-400/70 text-white dark:text-[#1b1e25] cursor-pointer select-none">
+                                        class="flex justify-between items-center px-4 py-2.5 bg-stone-300/70 dark:bg-[#c7e0da]/10 text-zinc-600 dark:text-[#c7e0da]/90 cursor-pointer select-none">
                                         <!-- the amount is the preferred item: it never wraps or shrinks;
                                              the title takes whatever room is left (min-w-0 lets it).
                                              top-[0.15em]: Roca's line box is taller above the caps than
@@ -194,7 +198,7 @@
                                     </header>
                                     <div x-show="!collapsed[group.groupId]" x-collapse.duration.200ms>
                                         <div class="p-2.5 sm:p-4">
-                                            <p class="text-xs text-zinc-400 mb-3" x-html="groupHint(group.kind)"></p>
+                                            <p class="text-xs text-zinc-400 dark:text-[#c7e0da]/50 mb-3" x-html="groupHint(group.kind)"></p>
 
                                             <!-- column headers for envelope/goal groups -->
                                             <div x-show="(group.kind === 'envelope' || group.kind === 'goal') && group.fields.length"
@@ -440,11 +444,11 @@
                                                     <div x-show="schedEditorFor === field.id" class="flex flex-wrap items-center gap-2 mt-1.5 pl-9 pr-20 text-[11px] text-zinc-400">
                                                         <span class="select-none">due</span>
                                                         <input type="month" x-model="field.dueKey" :disabled="frozen" title="When the full target is needed - the monthly deposit is derived from this."
-                                                            class="border border-zinc-200 rounded px-1.5 py-0.5 bg-white dark:bg-zinc-100 dark:text-[#c7e0da] text-[11px] focus:outline-none focus:ring-1 focus:ring-violet-400">
+                                                            class="border border-zinc-200 rounded px-1.5 py-0.5 bg-white dark:bg-zinc-100 dark:text-[#c7e0da] text-[11px] text-zinc-700 focus:outline-none focus:ring-1 focus:ring-violet-400">
                                                         <span class="select-none">every</span>
-                                                        <input type="number" min="0" x-model.number="field.freqMonths" placeholder="12" :disabled="frozen"
+                                                        <input type="number" min="0" x-model.number="field.freqMonths" :disabled="frozen"
                                                             title="Months between due dates (12 = yearly). 0 or blank = one-time - the due date won’t advance."
-                                                            class="w-12 border border-zinc-200 rounded px-1.5 py-0.5 text-right bg-white dark:bg-zinc-100 text-[11px] dark:text-[#c7e0da] focus:outline-none focus:ring-1 focus:ring-violet-400">
+                                                            class="w-12 border border-zinc-200 rounded px-1.5 py-0.5 text-right bg-white dark:bg-zinc-100 text-[11px] text-zinc-700 dark:text-[#c7e0da] focus:outline-none focus:ring-1 focus:ring-violet-400">
                                                         <span class="select-none">months</span>
                                                         <span x-show="isSched(group, field)" class="text-violet-600 dark:text-violet-400 font-semibold tabular-nums select-none"
                                                             x-text="'= ' + fmt(field.value) + ' this month'"></span>
@@ -519,9 +523,9 @@
                                                 </div>
                                             </template>
 
-                                            <div x-show="!group.fields.length" class="text-center py-2">
-                                                <button type="button" @click="addField(group)" :disabled="frozen"
-                                                    class="text-sm text-zinc-400 hover:text-emerald-600 dark:hover:text-emerald-400 cursor-pointer border border-dashed border-zinc-300 hover:border-emerald-400 rounded-md px-4 py-2 transition-colors inline-flex items-center gap-1.5"><svg class="w-3 h-3"><use href="#i-plus"/></svg>add the first field</button>
+                                            <div class="text-center py-1">
+                                                <button type="button" @click="addField(group)" x-html="'<svg class=\'w-4 h-4 mr-2\'><use href=\'#i-plus\'/></svg> Add a New '+ group.title +' field'" :disabled="frozen"
+                                                    class="text-sm w-full text-zinc-400 dark:text-[#c7e0da]/50 hover:text-emerald-600 dark:hover:text-emerald-400 cursor-pointer border border-dashed border-zinc-300 hover:border-emerald-400 rounded-md px-4 py-2 transition-colors inline-flex items-center"></button>
                                             </div>
                                         </div>
                                     </div>
@@ -561,11 +565,18 @@
                             <div class="space-y-2 w-full xl:w-auto order-1 xl:order-none">
                                 <template x-if="!isClosed">
                                     <div class="space-y-2">
-                                        <button type="button" @click="save()" :disabled="offline" title="Save (Ctrl+S) · Undo (Ctrl+Z) · Redo (Ctrl+Y)"
-                                            class="w-full bg-emerald-600 dark:bg-emerald-400/70 dark:text-[#1b1e25] hover:bg-emerald-500 border border-emerald-600 hover:border-emerald-500 text-white font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors disabled:bg-zinc-200 disabled:text-zinc-400"
-                                            x-text="isDirty ? 'Update This Month ●' : 'Update This Month'"></button>
-                                        <button type="button" x-show="isLatest" @click="closeOut()" :disabled="offline"
-                                            class="w-full bg-white dark:bg-zinc-100 border border-zinc-300 dark:border-[#c7e0da]/20 hover:border-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-400/90 text-zinc-600 dark:text-[#c7e0da]/90 font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors disabled:text-zinc-300 disabled:border-zinc-200">Close Out This Month</button>
+                                        <!-- disabled buttons are pointer-events:none (input.css), so the
+                                             not-allowed cursor has to live on a wrapper the hover falls
+                                             through to -->
+                                        <div :class="offline && 'cursor-not-allowed'">
+                                            <button type="button" @click="save()" :disabled="offline" title="Save (Ctrl+S) · Undo (Ctrl+Z) · Redo (Ctrl+Y)"
+                                                class="w-full bg-emerald-600 dark:bg-emerald-400/70 dark:text-[#1b1e25] hover:bg-emerald-500 border border-emerald-600 hover:border-emerald-500 text-white font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors disabled:bg-zinc-200 disabled:text-zinc-400 disabled:border-zinc-200"
+                                                x-text="isDirty ? 'Update This Month ●' : 'Update This Month'"></button>
+                                        </div>
+                                        <div x-show="isLatest" :class="offline && 'cursor-not-allowed'">
+                                            <button type="button" @click="closeOut()" :disabled="offline"
+                                                class="w-full bg-white dark:bg-zinc-100 border border-zinc-300 dark:border-[#c7e0da]/20 hover:border-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-400/90 text-zinc-600 dark:text-[#c7e0da]/90 font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors disabled:text-zinc-300 disabled:border-zinc-200">Close Out This Month</button>
+                                        </div>
                                     </div>
                                 </template>
                                 <template x-if="readonly">
@@ -578,12 +589,12 @@
                                 <template x-if="isClosed && unlocked">
                                     <div class="space-y-2">
                                         <button type="button" @click="save()" :disabled="offline"
-                                            class="w-full bg-amber-500 hover:bg-amber-400 border border-amber-500 hover:border-amber-400 text-white font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors disabled:bg-zinc-200 disabled:text-zinc-400">Save &amp; Recompute Forward</button>
+                                            class="w-full bg-amber-500 hover:bg-amber-400 border border-amber-500 hover:border-amber-400 text-white font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors disabled:bg-zinc-200 disabled:text-zinc-400 disabled:border-zinc-200">Save &amp; Recompute Forward</button>
                                         <button type="button" @click="cancelEditing()"
                                             class="w-full bg-white dark:bg-zinc-100 border border-zinc-300 hover:border-zinc-500 hover:text-zinc-700 text-zinc-600 font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors disabled:text-zinc-300 disabled:border-zinc-200">Cancel editing</button>
                                     </div>
                                 </template>
-                                <div class="mt-4 uppercase font-bold text-xs tracking-widest text-zinc-400 flex justify-between opacity-60"><span>Save <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+S</kbd></span><span>Undo <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+Z</kbd></span><span>Redo <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+Shift+Z</kbd></span></div>
+                                <div class="mt-4 uppercase font-bold text-xs tracking-widest text-zinc-400 justify-between opacity-60 hidden md:flex"><span>Save <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+S</kbd></span><span>Undo <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+Z</kbd></span><span>Redo <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+Shift+Z</kbd></span></div>
                             </div>
                         </aside>
                     </div>
@@ -634,8 +645,8 @@
                     <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-3 select-none">Spend by tag</h3>
                     <!-- charts mount by id, not x-ref: $refs go stale across x-if re-creation -->
                     <div id="insights-chart-donut"></div>
-                    <p x-show="!tagRows().length" class="text-center text-zinc-400 text-sm py-10">
-                        No spending in this range yet. Tag fields with the <span class="bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded inline-flex items-center align-middle"><svg class="w-3 h-3"><use href="#i-tag"/></svg></span> button -
+                    <p x-show="!tagRows().length" class="py-4 text-center text-zinc-400 text-sm">
+                        No spending in this range yet. Tag fields with the <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75 inline-block -mt-1"><svg class="w-4.25 h-3.5 inline-block -mt-0.5 pt-px pb-0"><use href="#i-tag"/></svg></kbd> button -
                         tagging a budget also covers the expenses that draw from it.
                     </p>
                 </section>
@@ -699,7 +710,7 @@
                                     <td class="py-1.5 text-right text-zinc-400" x-text="row.pct + '%'"></td>
                                 </tr>
                             </template>
-                            <tr x-show="!tagRows().length"><td colspan="4" class="py-4 text-center text-zinc-400 text-sm">No tagged spending yet - tag expenses with the # button in the Month view.</td></tr>
+                            <tr x-show="!tagRows().length"><td colspan="4" class="py-4 text-center text-zinc-400 text-sm">No tagged spending yet - tag expenses with the <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75 inline-block -mt-1"><svg class="w-4.25 h-3.5 inline-block -mt-1 pt-px"><use href="#i-tag"/></svg></kbd> button in the Month view.</td></tr>
                         </tbody>
                     </table>
                 </section>
@@ -932,7 +943,7 @@
                                         <div class="flex flex-wrap items-center gap-3">
                                             <button type="button" @click="toggleWeb()"
                                                 class="text-xs font-bold rounded-md px-4 py-2 cursor-pointer transition-colors"
-                                                :class="web.enabled ? 'hover:bg-emerald-500 text-white dark:text-[#1b1e25]' : 'border border-zinc-300 hover:bg-zinc-100 text-zinc-600'"
+                                                :class="web.enabled ? 'hover:bg-emerald-500 text-white dark:text-[#1b1e25] dark:bg-emerald-400/70' : 'border border-zinc-300 hover:bg-zinc-100 text-zinc-600'"
                                                 x-text="web.enabled ? 'Web access: on' : 'Turn on web access'"></button>
                                             <label class="flex items-center gap-1.5 text-xs text-zinc-500">
                                                 port

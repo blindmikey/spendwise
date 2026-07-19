@@ -118,6 +118,22 @@ html.dark .apexcharts-yaxis line { stroke: rgb(255 255 255 / 0.09) !important; }
 html.dark .apexcharts-pie-area { stroke: #262a33 !important; }
 html.dark .apexcharts-legend-marker path { stroke: transparent !important; }
 
+/* Tooltips (the hover pane and the crosshair's axis label) are HTML overlays
+   whose palette also comes from the render-time theme.mode - pin them in both
+   themes as well, so a chart rendered under one theme hovers correctly under
+   the other. The :before/:after rules retone the axis label's arrow. */
+.apexcharts-tooltip { color: #373d3f !important; background: rgba(255, 255, 255, 0.96) !important; border-color: #e3e3e3 !important; }
+.apexcharts-tooltip-title { background: #eceff1 !important; border-color: #ddd !important; }
+.apexcharts-xaxistooltip { color: #373d3f !important; background: #eceff1 !important; border-color: #90a4ae !important; }
+.apexcharts-xaxistooltip-bottom:before { border-bottom-color: #90a4ae !important; }
+.apexcharts-xaxistooltip-bottom:after { border-bottom-color: #eceff1 !important; }
+
+html.dark .apexcharts-tooltip { color: #e8eaef !important; background: rgba(38, 42, 51, 0.96) !important; border-color: #464c59 !important; }
+html.dark .apexcharts-tooltip-title { background: #1b1e25 !important; border-color: #333843 !important; }
+html.dark .apexcharts-xaxistooltip { color: #e8eaef !important; background: #333843 !important; border-color: #464c59 !important; }
+html.dark .apexcharts-xaxistooltip-bottom:before { border-bottom-color: #464c59 !important; }
+html.dark .apexcharts-xaxistooltip-bottom:after { border-bottom-color: #333843 !important; }
+
 #wordmark span:nth-child(1) { letter-spacing: 0em; }
 #wordmark span:nth-child(2) { letter-spacing: 0.0125em; }
 #wordmark span:nth-child(3) { letter-spacing: 0em; }

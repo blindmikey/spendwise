@@ -115,23 +115,30 @@ export function createCore (ctx) {
         },
 
         // Close out a month: finalize it, materialize the next via rollover.
-        async closeMonth ({ key, month, expectedRev }) {
+        // carryOver: ids of income/expense rows that never happened this month
+        // (value, no paid/received mark) - they are zeroed here and re-created
+        // in the next month, all inside this one write (see engine carryOver*).
+        async closeMonth ({ key, month, expectedRev, carryOver }) {
             assertRev(expectedRev);
             const nk = E.nextKey(key);
             if (ctx.db.data.months[nk]) {
                 throw new Error(`${E.keyLabel(nk)} already exists - edit it instead of closing ${E.keyLabel(key)} again.`);
             }
             backupDb(ctx.dbPath, 'close-month');
+            // extract before auto-values: a % rule must not fund from income
+            // that never arrived
+            const carried = E.carryOverExtract(month, carryOver);
             E.applyAutoValues(month);
             month.status = 'closed';
             month.closingSavings = E.savings(month);
             ctx.db.data.months[key] = month;
             ctx.db.data.savingsHistory[key] = E.num(month.startingSavings);
             const next = E.rollover(month, ctx.db.data.settings);
+            E.carryOverRestore(next, carried);
             ctx.db.data.months[nk] = next;
             ctx.db.data.savingsHistory[nk] = E.num(next.startingSavings);
             await persist();
-            return { ...snapshot(), nextKey: nk };
+            return { ...snapshot(), nextKey: nk, carried: carried.length };
         },
 
         // Save settings; open months re-sync to the new group list. The app

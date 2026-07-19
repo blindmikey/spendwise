@@ -252,6 +252,72 @@ describe('rollover', () => {
     });
 });
 
+// -------------------------------------------------------------- carry-over
+
+describe('close-time carry-over', () => {
+    function closeWithCarry (ids) {
+        const carried = E.carryOverExtract(month, ids);
+        const next = E.rollover(month, settings);
+        E.carryOverRestore(next, carried);
+        return { carried, next };
+    }
+
+    it('zeroes the row in the closing month, keeping it in history', () => {
+        E.carryOverExtract(month, ['f-side']);
+        const side = E.findField(month, 'f-side');
+        expect(side.value).toBe(0);
+        expect(side.accounted).toBe(false);
+    });
+
+    it('pinned row: the rolled copy gets its value back, unaccounted', () => {
+        const { next } = closeWithCarry(['f-pay']);
+        expect(E.findField(month, 'f-pay').value).toBe(0);
+        const pay = E.findField(next, 'f-pay');
+        expect(pay.value).toBe(2000);
+        expect(pay.pinned).toBe(true);
+        expect(pay.accounted).toBe(false);
+    });
+
+    it('unpinned row: re-inserted into its group with tags and budget link', () => {
+        const { next } = closeWithCarry(['f-side', 'f-food']);
+        const side = E.findField(next, 'f-side');
+        expect(side).toMatchObject({ value: 500, pinned: false, accounted: false });
+        const food = E.findField(next, 'f-food');
+        expect(food).toMatchObject({ value: 120, tags: ['food'], budgetId: 'f-groc' });
+        expect(E.groupOfField(next, 'f-food').groupId).toBe('g-exp');
+    });
+
+    it('carried value does not count in the closing month but moves whole to the next', () => {
+        const before = E.savings(month);
+        const { next } = closeWithCarry(['f-side']); // income 500 that never arrived
+        expect(E.savings(month)).toBe(before - 500);
+        expect(next.startingSavings).toBe(E.savings(month));
+        expect(E.findField(next, 'f-side').value).toBe(500);
+    });
+
+    it('a carried linked expense leaves the envelope unspent this month', () => {
+        // f-food (120) is linked to f-groc: carrying it means nothing was
+        // spent from the envelope, so the full allotment rolls forward
+        const { next } = closeWithCarry(['f-food']);
+        expect(E.findField(next, 'f-groc').avail).toBe(1000); // 500 + 500 remain
+    });
+
+    it('ignores accounted rows, envelope rows, and unknown ids', () => {
+        E.findField(month, 'f-pay').accounted = true;
+        const carried = E.carryOverExtract(month, ['f-pay', 'f-groc', 'nope']);
+        expect(carried).toEqual([]);
+        expect(E.findField(month, 'f-pay').value).toBe(2000);
+        expect(E.findField(month, 'f-groc').value).toBe(500);
+    });
+
+    it('falls back to a same-kind group when the original was deleted from settings', () => {
+        settings.groups = settings.groups.filter((g) => g.id !== 'g-inc');
+        settings.groups.push({ id: 'g-inc2', title: 'Other income', kind: 'income', order: 9 });
+        const { next } = closeWithCarry(['f-side']);
+        expect(E.groupOfField(next, 'f-side').groupId).toBe('g-inc2');
+    });
+});
+
 // ------------------------------------------------------------------- goals
 
 describe('goal envelopes (capped budgets)', () => {

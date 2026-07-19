@@ -352,6 +352,58 @@
         return next;
     }
 
+    /**
+     * Close-time carry-over: an income/expense row with a value that was never
+     * marked paid/received didn't actually happen this month - at close-out the
+     * user can move it into the next month instead of counting it.
+     *
+     * carryOverExtract(month, ids) runs BEFORE the close is computed, and
+     * before applyAutoValues - a % rule must not fund from income that never
+     * arrived. It zeroes each row (the zeroed, unaccounted row stays in the
+     * closed month's history, showing the item was expected but didn't happen)
+     * and captures a snapshot for re-materialization. Envelope-kind rows,
+     * already-accounted rows and unknown ids are ignored.
+     */
+    function carryOverExtract (month, ids) {
+        const entries = [];
+        for (const id of ids || []) {
+            const g = groupOfField(month, id);
+            if (!g || isEnvelopeKind(g.kind)) continue;
+            const f = g.fields.find((x) => x.id === id);
+            if (!f || truthy(f.accounted) || num(f.value) === 0) continue;
+            entries.push({ groupId: g.groupId, kind: g.kind, snap: clone(f) });
+            f.value = 0;
+        }
+        return entries;
+    }
+
+    /**
+     * The restore half, applied to the month rollover() built. A pinned row
+     * already carried (same id, value zeroed by the extract) - its value is
+     * put back. An unpinned row didn't carry - it is re-inserted into its
+     * group (same-kind fallback if the group was deleted from settings) with
+     * its original value, exactly as it sat before the close: unpinned,
+     * unaccounted, tags and budget link intact.
+     */
+    function carryOverRestore (next, entries) {
+        for (const e of entries || []) {
+            const carried = findField(next, e.snap.id);
+            if (carried) {
+                carried.value = num(e.snap.value);
+                carried.accounted = false;
+                continue;
+            }
+            const g = next.groups.find((g) => g.groupId === e.groupId)
+                || next.groups.find((g) => g.kind === e.kind);
+            if (!g) continue;
+            const nf = clone(e.snap);
+            nf.accounted = false;
+            if (nf.budgetId && !findField(next, nf.budgetId)) nf.budgetId = null;
+            g.fields.push(nf);
+        }
+        return next;
+    }
+
     /** Empty group instances for a brand-new month (first run). */
     function materializeMonth (settings, startingSavings = 0, key = undefined) {
         return {
@@ -721,6 +773,7 @@
         hasAuto, autoSourcesNet, fieldValue, applyAutoValues, contribution,
         groupTotal, monthNet, savings, unspentBudgets, savingsWithBudgets, goalProgress,
         strictFor, rolloverAvail, newField, sortedDefs, rollover,
+        carryOverExtract, carryOverRestore,
         materializeMonth, syncMonthWithSettings, returnableBalance, emptyEnvelope,
         applyTagsAcrossMonths, mergeMonth, recomputeForward,
         defaultSettings, defaultData,

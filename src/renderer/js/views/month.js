@@ -38,9 +38,11 @@ function monthView () {
         get readonly () { return this.isClosed && !this.unlocked; },
         get offline () { return !!this.ui.offline; },
         // readonly = "this month is history"; frozen = "you can't edit right
-        // now" (history OR no server to save to). The closed-month notice keys
-        // off readonly; every input disables on frozen.
-        get frozen () { return this.readonly || this.offline; },
+        // now". Offline does NOT freeze editing: edits accumulate locally and
+        // the Save button (plus the ops that need a server right now - saving,
+        // tags, close-out, unlocking history) disables until the connection
+        // returns; save-time merge reconciles anything another session did.
+        get frozen () { return this.readonly; },
         get label () { return this.key ? FinEngine.keyLabel(this.key) : ''; },
         get isDirty () { return this.month && JSON.stringify(this.month) !== this.ui.savedSnapshot; },
 
@@ -235,10 +237,10 @@ function monthView () {
 
         groupHint (kind) {
             return {
-                income: 'All income for the month. <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75"><svg class="w-3.5 h-3.5 inline-block -mt-1"><use href="#i-pin"/></svg></kbd> Pin recurring sources so they carry forward.',
-                envelope: 'Little savings accounts: Spending flows in automatically from expense rows assigned to the envelope. Use <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75"><svg class="w-3.5 h-3.5 inline-block -mt-1"><use href="#i-percent"/></svg></kbd> to auto-fund from a percentage of other groups.',
-                goal: 'Envelope budgets with a cap - ideal for recurring bills. Use <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75"><svg class="w-3.5 h-3.5 inline-block -mt-1"><use href="#i-clock"/></svg></kbd> to set a due date and the monthly deposit is calculated for you and re-spread each cycle.',
-                expense: 'Monthly or one-time expenses. <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75"><svg class="w-3.5 h-3.5 inline-block -mt-1"><use href="#i-pin"/></svg></kbd> Pin recurring ones. Assign one to an envelope and it spends from that envelope’s balance instead.',
+                income: 'All income for the month (rounds down). <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75 inline-block -mt-1"><svg class="w-3.5 h-3.5 inline-block -mt-1 pt-px"><use href="#i-pin"/></svg></kbd> Pin recurring sources so they carry forward. <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75 inline-block -mt-1"><svg class="w-3.5 h-3.5 inline-block -mt-1 pt-px"><use href="#i-check"/></svg></kbd> Mark income as it\'s paid or received.',
+                envelope: 'Little savings accounts: Spending flows in automatically from expenses assigned to the envelope. Use <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75 inline-block -mt-1"><svg class="w-3.5 h-3.5 inline-block -mt-1 pt-px"><use href="#i-percent"/></svg></kbd> to auto-fund from a percentage of other groups.',
+                goal: 'Envelope budgets with a cap - ideal for recurring bills. Use <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75 inline-block -mt-1"><svg class="w-3.5 h-3.5 inline-block -mt-1 pt-px"><use href="#i-clock"/></svg></kbd> to set a due date and the monthly deposit is calculated for you and re-spread each cycle.',
+                expense: 'All expenses for the month (rounds up). <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75 inline-block -mt-1"><svg class="w-3.5 h-3.5 inline-block -mt-1 pt-px"><use href="#i-pin"/></svg></kbd> Pin recurring ones. Assign one to an envelope and it spends from that envelope’s balance instead. <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75 inline-block -mt-1"><svg class="w-3.5 h-3.5 inline-block -mt-1 pt-px"><use href="#i-check"/></svg></kbd> Mark expenses as they\'re spent.',
             }[kind] || '';
         },
 
@@ -590,7 +592,7 @@ function monthView () {
         // ----------------------------------------------------- persistence
 
         async save () {
-            if (this.frozen) return;
+            if (this.frozen || this.offline) return; // offline: Ctrl+S must no-op like the button
             if (this.isClosed) return this.saveClosed();
             try {
                 const res = unwrap(await window.api.saveMonth({
@@ -659,9 +661,51 @@ function monthView () {
         async closeOut () {
             if (this.isClosed || !this.isLatest || this.offline) return;
             const nextLabel = FinEngine.keyLabel(FinEngine.nextKey(this.key));
+
+            // everything below mutates this CLONE, never the live month - a
+            // cancel at any step leaves the screen exactly as it was
+            const payload = FinEngine.clone(this.month);
+
+            // pre-close check: income/expense rows holding a value that was
+            // never marked paid/received - they either really happened (mark
+            // them), didn't and should move to next month (carry them), or
+            // the user wants another look first (cancel)
+            const pending = [];
+            for (const g of payload.groups) {
+                if (g.kind !== FinEngine.KIND.INCOME && g.kind !== FinEngine.KIND.EXPENSE) continue;
+                for (const f of g.fields) {
+                    if (!f.accounted && FinEngine.num(f.value) !== 0) pending.push(f);
+                }
+            }
+            let carryOver;
+            if (pending.length) {
+                const n = pending.length;
+                const list = pending.map((f) => `${f.label || 'unnamed'} (${fmt(f.value)})`).join(', ');
+                const answer = await confirmDialog({
+                    title: n === 1 ? 'One item isn\'t marked paid / received' : `${n} items aren't marked paid / received`,
+                    body: `${list}. Mark ${n === 1 ? 'it' : 'them all'} paid / received, or move ${n === 1 ? 'it' : 'them'} to `
+                        + `${nextLabel} so ${this.label} closes without ${n === 1 ? 'it' : 'them'}? Cancel to review yourself.`,
+                    confirmText: 'Mark paid / received',
+                    altText: `Move to ${nextLabel}`,
+                });
+                if (answer === false) return;
+                if (answer === true) {
+                    for (const f of pending) f.accounted = true;
+                } else {
+                    // ids only - the SERVER reads the true values off the
+                    // payload and zeroes them (carryOverExtract), so the
+                    // payload must go up un-zeroed
+                    carryOver = pending.map((f) => f.id);
+                }
+            }
+
+            // preview what the close will compute, via the same engine
+            // function the server runs - on a throwaway clone
+            const preview = FinEngine.clone(payload);
+            if (carryOver) FinEngine.carryOverExtract(preview, carryOver);
             const okClose = await confirmDialog({
                 title: `Close out ${this.label}?`,
-                body: `Finalizes ${this.label} with ${fmt(this.currentSavings)} in savings, rolls pinned fields and `
+                body: `Finalizes ${this.label} with ${fmt(FinEngine.savings(preview))} in savings, rolls pinned fields and `
                     + `envelope balances forward, and starts ${nextLabel}. You can still edit it later.`,
                 confirmText: 'Close Out Month',
             });
@@ -669,8 +713,9 @@ function monthView () {
             try {
                 const res = unwrap(await window.api.closeMonth({
                     key: this.key,
-                    month: FinEngine.clone(this.month),
+                    month: payload,
                     expectedRev: this.db.meta.rev,
+                    carryOver,
                 }));
                 Alpine.store('data').db = res.data;
                 this.ui.currentKey = res.nextKey;
@@ -678,7 +723,9 @@ function monthView () {
                 this.refreshRateCache();
                 this.resetHistory();
                 this.renderChart();
-                showToast(`${FinEngine.keyLabel(res.nextKey)} is ready`, 'success');
+                showToast(res.carried
+                    ? `${FinEngine.keyLabel(res.nextKey)} is ready - ${res.carried} ${res.carried === 1 ? 'item' : 'items'} moved over`
+                    : `${FinEngine.keyLabel(res.nextKey)} is ready`, 'success');
             } catch (e) {
                 showToast(e.message, 'error', 7000);
             }

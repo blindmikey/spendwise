@@ -7,6 +7,7 @@
  * the desktop app against the same db.json, or pre-seed the file).
  *
  *   spendwise-server                     # serve
+ *   spendwise-server --password <pw>     # serve with a session-only password
  *   spendwise-server --set-password      # set/change the login (then exit)
  *   spendwise-server --help
  *
@@ -37,6 +38,7 @@ import { openDb } from '../main/db-open.js';
 if (!globalThis.crypto) globalThis.crypto = webcrypto;
 import { createCore } from '../main/api-core.js';
 import { createWebServer } from '../main/webserver.js';
+import { hashPassword } from '../main/auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
@@ -54,6 +56,8 @@ if (flag('--help') || flag('-h')) {
 
   Usage
     spendwise-server                 serve the app
+    spendwise-server --password <pw> serve with a session-only password - for
+                                     local testing; the stored one is untouched
     spendwise-server --set-password  set or change the login password, then exit
     spendwise-server --version
 
@@ -139,6 +143,15 @@ if (!core.authHas().hasPassword && process.env.FINANCES_PASSWORD) {
     console.log('[auth] password set from FINANCES_PASSWORD');
 }
 
+// --password <pw>: session-only login for local testing (npm run serve --
+// --password test). Held in memory and checked ahead of the stored hash;
+// nothing is written, so it cannot clobber (or leak into) the real password.
+const sessionPw = flagValue('--password');
+if (sessionPw) {
+    ctx.authOverride = hashPassword(sessionPw);
+    console.log('[auth] session-only password active (--password) - the stored password is untouched');
+}
+
 const web = createWebServer(ctx, core, {
     host,
     trustProxy: process.env.FINANCES_TRUST_PROXY,
@@ -150,7 +163,7 @@ await web.start(port, host);
 console.log(`Spend Wise v${pkg.version}`);
 console.log(`  serving   http://${host === '0.0.0.0' ? 'localhost' : host}:${port}`);
 console.log(`  database  ${dbPath}`);
-if (!core.authHas().hasPassword) {
+if (!core.authHas().hasPassword && !ctx.authOverride) {
     console.log('\n  ⚠ No app password set - the server will refuse to serve the app until you run:');
     console.log('      spendwise-server --set-password\n');
 }

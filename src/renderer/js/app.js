@@ -14,7 +14,7 @@ document.addEventListener('alpine:init', () => {
     Alpine.store('ui', {
         view: 'month', // month | insights | settings
         locked: false, // app-password lock screen (desktop only - web logs in at the server)
-        offline: false, // web only: no server → read-only until it's back
+        offline: false, // web only: no server → editing continues, saving pauses
         switching: false, // month change rendering: hides main, shows "loading…"
         settingsDirty: false, // mirrored by settingsView for the unsaved-changes gate
         currentKey: null,
@@ -49,6 +49,32 @@ function loadScreen () {
     try { return JSON.parse(localStorage.getItem(SCREEN_KEY)) || {}; } catch (e) { return {}; }
 }
 
+// The screen is also mirrored into the URL hash (#month/2026-05, #insights,
+// #settings) so the browser's back/forward buttons walk the navigation
+// history. Hash, not path: it needs no server routing and works under
+// file:// in the desktop app.
+const VIEWS = ['month', 'insights', 'settings'];
+
+function hashFor (view, key) {
+    return view === 'month' && key ? `#month/${key}` : `#${view}`;
+}
+
+/**
+ * pushState/replaceState resolve a bare '#hash' against the <base> element,
+ * and the web server injects <base href="/renderer/"> for asset paths - a
+ * bare push would rewrite the address to /renderer/#... (which even 404s on
+ * reload). Pinning to the document's own path keeps the address bar at /#...
+ */
+function setHash (method, hash) {
+    history[method](null, '', location.pathname + location.search + hash);
+}
+
+function parseHash () {
+    const [view, key] = location.hash.replace(/^#\/?/, '').split('/');
+    if (!VIEWS.includes(view)) return null;
+    return { view, key: view === 'month' && /^\d{4}-\d{2}$/.test(key || '') ? key : null };
+}
+
 function appRoot () {
     return {
         async init () {
@@ -66,16 +92,47 @@ function appRoot () {
                 const saved = loadScreen(); // restore last screen, but only what still exists
                 ui.currentKey = res.data.months[saved.key] ? saved.key
                     : open.length ? open[open.length - 1] : keys[keys.length - 1];
-                if (['month', 'insights', 'settings'].includes(saved.view)) ui.view = saved.view;
+                if (VIEWS.includes(saved.view)) ui.view = saved.view;
+                // a URL hash outranks the remembered screen (reload, shared link)
+                const fromHash = parseHash();
+                if (fromHash) {
+                    ui.view = fromHash.view;
+                    if (fromHash.key && res.data.months[fromHash.key]) ui.currentKey = fromHash.key;
+                }
                 ui.savedSnapshot = JSON.stringify(res.data.months[ui.currentKey]);
                 // desktop privacy lock; web clients authenticated at the server
                 ui.locked = !!(res.data.settings && res.data.settings.auth) && !window.IS_WEB;
 
                 // reactive persistence: fires on any view/month change, whatever
-                // its origin (nav, header picker, close-out advancing the month)
+                // its origin (nav, header picker, close-out advancing the month).
+                // Also mirrors the screen into the hash - replace on this first
+                // run (booting isn't a navigation), push after that. popstate
+                // needs no loop guard: by the time the effect fires, the hash
+                // the browser restored already equals the desired one.
+                let booting = true;
                 Alpine.effect(() => {
                     const snap = JSON.stringify({ view: ui.view, key: ui.currentKey });
                     try { localStorage.setItem(SCREEN_KEY, snap); } catch (e) { /* private mode - session only */ }
+                    const desired = hashFor(ui.view, ui.currentKey);
+                    if (location.hash !== desired) {
+                        setHash(booting ? 'replaceState' : 'pushState', desired);
+                    }
+                    booting = false;
+                });
+
+                // back/forward: re-apply the screen the hash describes. The
+                // month switch runs through monthGoto's unsaved-edits guard -
+                // on cancel (or a stale key) the URL is re-aligned with reality.
+                window.addEventListener('popstate', async () => {
+                    const target = parseHash();
+                    if (!target || !data.loaded) return;
+                    if (target.view !== ui.view) ui.view = target.view;
+                    if (target.key && target.key !== ui.currentKey
+                        && data.db.months[target.key] && ui.monthGoto) {
+                        await ui.monthGoto(target.key);
+                    }
+                    const desired = hashFor(ui.view, ui.currentKey);
+                    if (location.hash !== desired) setHash('replaceState', desired);
                 });
             } catch (e) {
                 showToast('Failed to load data: ' + e.message, 'error', 12000);
@@ -148,10 +205,12 @@ function appRoot () {
         },
 
         /**
-         * A web client needs the server for every read and write, so losing it
-         * puts the app in read-only rather than letting edits pile up with
-         * nowhere to go. The desktop app talks to its own process - it is
-         * never offline, even with the network down.
+         * A web client needs the server to persist anything, so losing it
+         * pauses saving (and the immediate-persist ops: tags, close-out,
+         * unlock) while local editing continues - the save-time merge
+         * reconciles with anything another session did in the meantime.
+         * The desktop app talks to its own process - it is never offline,
+         * even with the network down.
          */
         watchConnection () {
             if (!window.IS_WEB) return;
