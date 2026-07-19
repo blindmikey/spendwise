@@ -482,7 +482,11 @@
                                                              an unlinked row is just a lone "-" otherwise. "from" is
                                                              what this control is called elsewhere in the UI copy. -->
                                                         <template x-if="group.kind === 'expense'">
-                                                            <div class="flex items-center gap-1.5 shrink-0 max-sm:order-7">
+                                                            <!-- max-sm:w-full: on phones this pair owns its own wrapped
+                                                                 line, and the combobox (unlike the old <select>) has no
+                                                                 intrinsic option width - without a real width from the
+                                                                 parent it collapses to a character -->
+                                                            <div class="flex items-center gap-1.5 shrink-0 max-sm:w-full max-sm:order-7">
                                                                 <span class="sm:hidden shrink-0 text-[10px] uppercase tracking-widest text-zinc-350 select-none">from</span>
                                                                 <!-- searchable combobox (budgetPicker, month.js): long envelope
                                                                      lists filter as you type. Selection rules match the old
@@ -493,7 +497,7 @@
                                                                 <!-- scroll closes it: the fixed panel can't track its row, and a
                                                                      detached dropdown is worse than a dismissed one. The option
                                                                      list's own scrolling never reaches the window (no bubbling). -->
-                                                                <div class="relative w-[calc(100%-24px)] sm:w-[198px] shrink-0" x-data="budgetPicker(field)"
+                                                                <div class="relative max-sm:flex-1 max-sm:min-w-0 sm:w-[198px] shrink-0" x-data="budgetPicker(field)"
                                                                     @keydown.escape.stop="open = false" @click.outside="open = false" @scroll.window="open = false">
                                                                     <button type="button" @click="toggle()" :disabled="frozen" title="Draw this expense from an envelope"
                                                                         class="w-full text-left text-xs border border-zinc-200 rounded py-2 pl-2 pr-6 bg-zinc-50 dark:bg-zinc-50 cursor-pointer focus:outline-none focus:ring-1 focus:ring-emerald-500 relative"
