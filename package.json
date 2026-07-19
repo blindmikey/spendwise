@@ -1,7 +1,7 @@
 {
   "name": "spendwise",
   "productName": "Spend Wise",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "A Simple and easy-to-use envelope-budgeting app",
   "author": "blindmikey <github@blindmikey.com>",
   "repository": {

@@ -10,12 +10,18 @@ function settingsView (primary = false) {
         // report phantom unsaved settings after any real save bumps the rev.
         primary,
         draft: null,
+        _base: null, // JSON of the settings the draft was cloned from
         backups: [],
         initialUnlocked: false, // opt-in to edit initial savings once history exists
 
         get db () { return Alpine.store('data').db; },
         get ui () { return Alpine.store('ui'); },
         get dirty () { return !!(this.draft && this.db && JSON.stringify(this.draft) !== JSON.stringify(this.db.settings)); },
+        // dirty = "differs from what's saved" (the save gate). userDirty =
+        // "the USER changed the draft" - measured against the settings the
+        // draft was cloned from, so settings replaced underneath an untouched
+        // draft (onboarding, another session's save) don't read as edits.
+        get userDirty () { return !!(this.draft && this._base && JSON.stringify(this.draft) !== this._base); },
         get dbPath () { return Alpine.store('data').path; },
 
         init () {
@@ -25,12 +31,16 @@ function settingsView (primary = false) {
             // watched value on every dependency change, so watching the whole db
             // made every keystroke re-stringify the entire multi-year database.
             this.$watch('db?.meta.rev', () => {
-                // primary guards genuine unsaved edits; the modal reuses have
-                // none worth keeping, so they always resync to the new settings
-                if (!this.primary || !this.dirty) this.reset();
+                // primary guards genuine unsaved USER edits; the modal reuses
+                // have none worth keeping, so they always resync. dirty would
+                // be wrong here: settings replaced underneath an untouched
+                // draft (onboarding) make it read true and freeze the draft.
+                if (!this.primary || !this.userDirty) this.reset();
             });
             if (!this.primary) return;
             this.loadWebStatus();
+            this.loadRemoteStatus();
+            this.watchRemoteIntent();
             // sync once (the watch below only fires on change) then mirror to the
             // store so the unsaved-changes gate (app.js) can see draft edits here
             this.ui.settingsDirty = this.dirty;
@@ -38,7 +48,8 @@ function settingsView (primary = false) {
         },
 
         reset () {
-            this.draft = this.db ? FinEngine.clone(this.db.settings) : null;
+            this._base = this.db ? JSON.stringify(this.db.settings) : null;
+            this.draft = this._base ? JSON.parse(this._base) : null;
             this.initialUnlocked = false;
         },
 
@@ -180,6 +191,87 @@ function settingsView (primary = false) {
         pwCurrent: '', pwNew: '', pwConfirm: '',
         get hasPassword () { return !!(this.db && this.db.settings && this.db.settings.auth); },
         get isWeb () { return !!window.IS_WEB; },
+        get isRemote () { return !!window.IS_REMOTE; },
+
+        // ------------------------------------------------- remote database
+
+        // choice is the toggle's UI state (which panel shows); connected is
+        // reality - the mode only changes through Connect / Disconnect
+        remote: { choice: 'local', connected: false, host: '', formHost: '', formPassword: '', busy: false },
+
+        async loadRemoteStatus () {
+            if (this.isWeb || !window.api.remoteStatus) return; // desktop only
+            try {
+                const r = unwrap(await window.api.remoteStatus());
+                this.remote.connected = r.connected;
+                this.remote.host = r.host || '';
+                this.remote.choice = r.connected ? 'remote' : 'local';
+            } catch { /* pane simply shows the local default */ }
+        },
+
+        async remoteConnect () {
+            if (this.remote.busy) return;
+            this.remote.busy = true;
+            try {
+                const r = unwrap(await window.api.remoteConnect({
+                    host: this.remote.formHost, password: this.remote.formPassword,
+                }));
+                this.remote.formPassword = '';
+                showToast(`Connected to ${r.host} - reloading…`, 'success', 2000);
+                // re-enter in remote mode: preload re-reads the flag on load
+                setTimeout(() => window.location.reload(), 400);
+            } catch (e) {
+                showToast(e.message, 'error', 8000);
+                this.remote.busy = false;
+            }
+        },
+
+        /** The unconfirmed cut-over - callers have already established intent. */
+        async switchToLocal () {
+            try {
+                unwrap(await window.api.remoteDisconnect());
+                window.location.reload();
+            } catch (e) { showToast(e.message, 'error', 8000); }
+        },
+
+        async remoteDisconnect () {
+            const okBack = await confirmDialog({
+                title: 'Back to the local database?',
+                body: 'The app returns to the db.json on this machine. Nothing on the server is changed, '
+                    + 'and you can reconnect anytime.',
+                confirmText: 'Disconnect',
+            });
+            if (okBack) await this.switchToLocal();
+        },
+
+        /**
+         * Toggling to "Local file" while connected is an intent, not an action
+         * (instant disconnect would punish UI exploration). The panel offers
+         * the explicit switch button; this catches the intent if the user
+         * leaves Settings without acting on it - confirm switches, cancel
+         * snaps the toggle back to reality.
+         */
+        watchRemoteIntent () {
+            this.$watch('ui.view', async (view, prev) => {
+                if (prev !== 'settings' || view === 'settings') return;
+                // not connected: a "Remote server" selection that never
+                // connected is abandoned exploration - snap back silently
+                if (!this.remote.connected) {
+                    this.remote.choice = 'local';
+                    return;
+                }
+                if (this.remote.choice !== 'local') return;
+                const okSwitch = await confirmDialog({
+                    title: 'Switch to the local database?',
+                    body: `You picked “Local file” but are still connected to ${this.remote.host}. `
+                        + 'Disconnect and use the db.json on this machine? Nothing on the server changes.',
+                    confirmText: 'Switch to local',
+                    cancelText: 'Stay connected',
+                });
+                if (okSwitch) await this.switchToLocal();
+                else this.remote.choice = 'remote';
+            });
+        },
 
         async setPassword () {
             if (!this.pwNew) return showToast('Enter a new password.', 'error');

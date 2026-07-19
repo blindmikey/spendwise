@@ -12,7 +12,7 @@
          use-credentials: the manifest sits behind the session cookie, and a
          credential-less fetch would just get the login page back -->
     <link rel="manifest" href="manifest.json" crossorigin="use-credentials">
-    <meta name="theme-color" content="#059669">
+    <meta name="theme-color" content="#007a71">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Spend Wise">
@@ -31,6 +31,7 @@
     <script src="js/views/month.js"></script>
     <script src="js/views/insights.js"></script>
     <script src="js/views/settings.js"></script>
+    <script src="js/views/onboarding.js"></script>
     <script src="js/app.js"></script>
     <script defer src="vendor/alpine-collapse.min.js"></script>
     <script defer src="vendor/alpine.min.js"></script>
@@ -54,27 +55,120 @@
     <symbol id="i-chevron" viewBox="0 0 640 640"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path fill="currentColor" d="M297.4 470.6C309.9 483.1 330.2 483.1 342.7 470.6L534.7 278.6C547.2 266.1 547.2 245.8 534.7 233.3C522.2 220.8 501.9 220.8 489.4 233.3L320 402.7L150.6 233.4C138.1 220.9 117.8 220.9 105.3 233.4C92.8 245.9 92.8 266.2 105.3 278.7L297.3 470.7z"/></svg></symbol>
 </svg>
 
-<div x-data="appRoot()" x-cloak>
+<div x-data="appRoot()" x-cloak @keydown.window="searchHotkey($event)">
 
-    <!-- lock screen: casual privacy for shared computers (web logs in at the server) -->
+    <!-- lock screen, two jobs: casual privacy for a local db (unlock in
+         place), and the sign-in gate for a remote db with no live session
+         (remoteGate: password → server login → reload). Web logs in at the
+         server before this page ever loads. -->
     <template x-if="$store.ui.locked">
         <!-- mirrors the web sign-in page (webserver.js LOGIN_PAGE): ground
              zinc-100/50, raised card, emerald-400 brand ink in dark, solid
              emerald button - change one, change the other -->
         <div class="fixed inset-0 z-[100] bg-zinc-100 dark:bg-zinc-50 flex items-center justify-center" x-data="{ pw: '', busy: false, bad: false }">
             <form class="bg-white dark:bg-zinc-100 border border-zinc-200 rounded-xl shadow-lg p-8 w-80 text-center" :class="bad && 'animate-shake'"
-                @submit.prevent="busy = true; bad = false; window.api.authVerify({ password: pw }).then((r) => {
-                    busy = false;
-                    if (r.ok && r.valid) { $store.ui.locked = false; } else { bad = true; pw = ''; }
-                })">
+                @submit.prevent="busy = true; bad = false;
+                    ($store.ui.remoteGate
+                        ? window.api.remoteLogin({ password: pw }).then((r) => {
+                            if (r.ok) { window.location.reload(); } else { busy = false; bad = true; pw = ''; }
+                        })
+                        : window.api.authVerify({ password: pw }).then((r) => {
+                            busy = false;
+                            if (r.ok && r.valid) { $store.ui.locked = false; } else { bad = true; pw = ''; }
+                        }))">
                 <img src="assets/icon.ico" alt="" class="h-10 w-10 mx-auto mb-2" draggable="false">
-                <h1 class="font-black font-brand text-lg text-emerald-700 dark:text-[#c7e0da] mb-4 select-none">Spend Wise</h1>
+                <h1 class="font-black font-brand text-lg text-emerald-700 dark:text-[#c7e0da] select-none"
+                    :class="$store.ui.remoteGate ? 'mb-1' : 'mb-4'">Spend Wise</h1>
+                <p x-show="$store.ui.remoteGate" class="text-[11px] text-zinc-400 font-mono mb-4 select-none" x-text="$store.ui.remoteHost"></p>
                 <input type="password" x-model="pw" placeholder="App password" x-init="$nextTick(() => $el.focus())"
                     class="w-full border border-zinc-300 dark:bg-zinc-50 rounded-md px-3 py-2 text-sm text-center focus:outline-none focus:ring-1 focus:ring-emerald-500">
                 <button type="submit" :disabled="busy || !pw"
-                    class="mt-3 w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-md py-2 text-sm font-bold cursor-pointer transition-colors disabled:bg-zinc-200 disabled:text-zinc-400">Unlock</button>
+                    class="mt-3 w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-md py-2 text-sm font-bold cursor-pointer transition-colors disabled:bg-zinc-200 disabled:text-zinc-400"
+                    x-text="$store.ui.remoteGate ? 'Sign in' : 'Unlock'"></button>
                 <p x-show="bad" class="text-xs text-red-600 dark:text-red-400 mt-2">Wrong password</p>
+                <!-- escape hatch: a forgotten remote password must not brick the app -->
+                <button type="button" x-show="$store.ui.remoteGate" :disabled="busy"
+                    @click="window.api.remoteDisconnect().then(() => window.location.reload())"
+                    class="text-[11px] text-zinc-400 hover:text-zinc-600 mt-4 cursor-pointer select-none">Use the local database on this machine instead</button>
             </form>
+        </div>
+    </template>
+
+    <!-- first-run onboarding: a fresh db gets a short wizard instead of a
+         blank screen (see js/views/onboarding.js). Below the lock (z-100),
+         above everything else. -->
+    <template x-if="$store.ui.onboarding">
+        <div class="fixed inset-0 z-[90] bg-zinc-100 dark:bg-zinc-50 flex items-center justify-center p-4 overflow-y-auto" x-data="onboardingView()">
+            <div class="bg-white dark:bg-zinc-100 border border-zinc-200 rounded-xl shadow-lg p-8 w-full max-w-lg my-auto">
+                <img src="assets/icon.ico" alt="" class="h-10 w-10 mx-auto mb-2" draggable="false">
+                <h1 class="font-black font-brand text-lg text-emerald-700 dark:text-[#c7e0da] text-center select-none">Welcome to Spend Wise</h1>
+                <p class="text-xs text-zinc-400 text-center mb-6 select-none" x-text="'Step ' + step + ' of ' + stepCount"></p>
+
+                <!-- step 1: savings right now -->
+                <div x-show="step === 1">
+                    <h2 class="font-bold text-base text-zinc-700 mb-1 select-none">What’s your total savings right now?</h2>
+                    <p class="text-sm text-zinc-400 mb-4 leading-relaxed">Whatever you’d count as “money we have” today - checking plus savings.
+                        Starting mid-month is fine: use today’s number, then only enter income and expenses that happen <span class="font-semibold">from today on</span>.
+                        Anything already inside that number would otherwise be counted twice.</p>
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 select-none">$</span>
+                        <input type="number" x-model.number="savingsNow" placeholder="0" x-init="$nextTick(() => $el.focus())"
+                            class="w-full border border-zinc-300 dark:bg-zinc-50 rounded-md pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                    </div>
+                </div>
+
+                <!-- step 2: how money comes in -->
+                <div x-show="step === 2">
+                    <h2 class="font-bold text-base text-zinc-700 mb-1 select-none">How does money come in?</h2>
+                    <p class="text-sm text-zinc-400 mb-4">This picks a sensible starting layout, with a few starter rows to rename or remove - every group can be reshaped later in Settings.</p>
+                    <div class="space-y-2">
+                        <template x-for="opt in SITUATIONS" :key="opt[0]">
+                            <label class="flex items-start gap-3 border rounded-md px-4 py-3 cursor-pointer transition-colors select-none"
+                                :class="situation === opt[0] ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10' : 'border-zinc-200 hover:border-zinc-300'">
+                                <input type="radio" name="ob-situation" :value="opt[0]" x-model="situation" class="accent-emerald-600 mt-0.5">
+                                <span>
+                                    <span class="block text-sm font-semibold text-zinc-700" x-text="opt[1]"></span>
+                                    <span class="block text-sm text-zinc-400" x-text="opt[2]"></span>
+                                </span>
+                            </label>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- step 3 (self-employment only): tax set-aside -->
+                <div x-show="step === 3">
+                    <h2 class="font-bold text-base text-zinc-700 mb-1 select-none">Set aside self-employment taxes?</h2>
+                    <p class="text-sm text-zinc-400 mb-4 leading-relaxed">A common rule of thumb is to park about a third of net self-employment
+                        income (income minus business expenses) for taxes. Spend Wise can fund a
+                        <span class="font-semibold">Tax Savings</span> envelope automatically each month.</p>
+                    <label class="flex items-center gap-2 text-sm text-zinc-600 cursor-pointer select-none mb-3">
+                        <input type="checkbox" x-model="taxWanted" class="accent-emerald-600">
+                        Fund a Tax Savings envelope automatically
+                    </label>
+                    <div class="flex items-center gap-2" :class="!taxWanted && 'opacity-40'">
+                        <input type="number" x-model.number="taxPct" :disabled="!taxWanted" min="1" max="99"
+                            class="w-20 border border-zinc-300 dark:bg-zinc-50 rounded-md px-3 py-2 text-sm text-right focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                        <span class="text-sm text-zinc-500 select-none">% of net self-employment income</span>
+                    </div>
+                    <p class="text-xs text-zinc-400 mt-3">Adjust anytime with the <span class="bg-violet-100 dark:bg-violet-500/15 text-violet-600 dark:text-violet-400 px-1 rounded font-semibold">%</span> button on the Tax Savings row.</p>
+                </div>
+
+                <div class="mt-6 flex items-center gap-3">
+                    <button type="button" x-show="step > 1" @click="back()"
+                        class="text-xs text-zinc-400 hover:text-zinc-600 cursor-pointer select-none">‹ Back</button>
+                    <div class="flex-1"></div>
+                    <button type="button" @click="next()" :disabled="busy"
+                        class="bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-400/70 dark:text-[#1b1e25] text-white font-bold uppercase tracking-widest text-xs rounded-md px-6 py-2.5 cursor-pointer transition-colors disabled:bg-zinc-200 disabled:text-zinc-400"
+                        x-text="step === stepCount ? 'Finish' : 'Continue'"></button>
+                </div>
+
+                <div class="mt-5 pt-4 border-t border-zinc-100 flex items-center justify-between gap-3">
+                    <button type="button" @click="skip()" :disabled="busy"
+                        class="text-xs text-zinc-400 hover:text-zinc-600 cursor-pointer select-none">Skip - I’ll set things up myself</button>
+                    <button type="button" x-show="!isWeb" @click="adoptExisting()" :disabled="busy"
+                        class="text-xs text-zinc-400 hover:text-emerald-700 dark:hover:text-emerald-400 cursor-pointer select-none">I already have a db.json…</button>
+                </div>
+            </div>
         </div>
     </template>
 
@@ -121,18 +215,25 @@
                 </div>
                 </template>
                 <nav class="flex gap-1 items-center">
+                <button type="button" @click="$store.ui.searchOpen = true" title="Search (Ctrl+K)"
+                    class="p-1.5 sm:mr-2 rounded-md transition-colors cursor-pointer text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700">
+                    <!-- magnifying-glass, Font Awesome Free (same licence note as the sprite above) -->
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="currentColor" class="w-4 h-4" aria-hidden="true">
+                        <path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z"/>
+                    </svg>
+                </button>
                 <button type="button" @click="switchView('month')"
-                    class="px-2.5 sm:px-4 py-1.5 rounded-md text-sm font-semibold transition-colors cursor-pointer"
+                    class="max-sm:hidden px-2.5 sm:px-4 py-1.5 rounded-md text-sm font-semibold transition-colors cursor-pointer"
                     :class="$store.ui.view === 'month' ? 'bg-emerald-600 dark:bg-emerald-400/70 text-white dark:text-[#1b1e25]' : 'text-zinc-500 hover:bg-zinc-100'">Month</button>
                 <button type="button" @click="switchView('insights')" title="Insights"
-                    class="px-2.5 sm:px-4 py-1.5 rounded-md text-sm font-semibold transition-colors cursor-pointer flex items-center"
+                    class="max-sm:hidden px-2.5 sm:px-4 py-1.5 rounded-md text-sm font-semibold transition-colors cursor-pointer flex items-center"
                     :class="$store.ui.view === 'insights' ? 'bg-emerald-600 dark:bg-emerald-400/70 text-white dark:text-[#1b1e25]' : 'text-zinc-500 hover:bg-zinc-100'">
                     <span class="hidden sm:inline">Insights</span>
                     <svg class="w-4 h-4 sm:hidden"><use href="#i-bulb"/></svg>
                 </button>
                 <button type="button" @click="switchView('settings')"
                     :title="$store.data.update.available ? 'Settings — version ' + $store.data.update.latest + ' is available' : 'Settings'"
-                    class="relative p-1.5 rounded-md transition-colors cursor-pointer"
+                    class="max-sm:hidden relative p-1.5 rounded-md transition-colors cursor-pointer"
                     :class="$store.ui.view === 'settings' ? 'bg-emerald-600 dark:bg-emerald-400/70 text-white dark:text-[#1b1e25]' : 'text-zinc-500 hover:bg-zinc-100'">
                     <!-- the launch toast fades; this doesn't, so the nudge survives
                          without ever blocking the books -->
@@ -140,6 +241,42 @@
                         class="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-zinc-100"></span>
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5" aria-hidden="true">
                         <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+                    </svg>
+                </button>
+                <!-- mobile overflow: Month / Insights / Settings collapse into a
+                     kebab, like the entry-row actions. click.outside on the ROOT
+                     so the opening tap isn't its own "outside" (see the budget
+                     picker for the microtask story). The update dot moves to the
+                     trigger so the nudge survives consolidation. -->
+                <div class="relative sm:hidden" x-data="{ navOpen: false }" @click.outside="navOpen = false">
+                    <button type="button" @click="navOpen = !navOpen" title="Menu"
+                        class="relative p-1.5 rounded-md transition-colors cursor-pointer text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700">
+                        <span x-show="$store.data.update.available" aria-hidden="true"
+                            class="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-zinc-100"></span>
+                        <svg class="w-5 h-5"><use href="#i-kebab"/></svg>
+                    </button>
+                    <template x-if="navOpen">
+                        <div class="absolute right-0 mt-1 w-40 bg-white dark:bg-zinc-100 border border-zinc-200 rounded-md shadow-lg py-1 z-50">
+                            <template x-for="opt in [['month','Month'],['insights','Insights'],['settings','Settings']]" :key="opt[0]">
+                                <button type="button" @click="switchView(opt[0]); navOpen = false"
+                                    class="w-full text-left px-3 py-2 text-sm cursor-pointer flex items-center justify-between"
+                                    :class="$store.ui.view === opt[0] ? 'font-semibold text-emerald-700 dark:text-emerald-400' : 'text-zinc-600'">
+                                    <span x-text="opt[1]"></span>
+                                    <span x-show="opt[0] === 'settings' && $store.data.update.available"
+                                        class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+                <!-- auth control: Log out (web / remote session) or Lock (local
+                     db with a password). Hidden when there's nothing to leave. -->
+                <button type="button" x-show="$store.ui.authKind" @click="authAction()"
+                    :title="$store.ui.authKind === 'lock' ? 'Lock the app' : 'Log out'"
+                    class="p-1.5 rounded-md transition-colors cursor-pointer text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700">
+                    <!-- arrow-right-from-bracket, Font Awesome Free (same licence note as the sprite above) -->
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="currentColor" class="w-5 h-5" aria-hidden="true">
+                        <path d="M377.9 105.9L500.7 228.7c7.2 7.2 11.3 17.1 11.3 27.3s-4.1 20.1-11.3 27.3L377.9 406.1c-6.4 6.4-15 9.9-24 9.9c-18.7 0-33.9-15.2-33.9-33.9l0-62.1-128 0c-17.7 0-32-14.3-32-32l0-64c0-17.7 14.3-32 32-32l128 0 0-62.1c0-18.7 15.2-33.9 33.9-33.9c9 0 17.6 3.6 24 9.9zM160 96L96 96c-17.7 0-32 14.3-32 32l0 256c0 17.7 14.3 32 32 32l64 0c17.7 0 32 14.3 32 32s-14.3 32-32 32l-64 0c-53 0-96-43-96-96L0 128C0 75 43 32 96 32l64 0c17.7 0 32 14.3 32 32s-14.3 32-32 32z"/>
                     </svg>
                 </button>
             </nav>
@@ -179,7 +316,7 @@
                             <template x-for="group in month.groups" :key="group.groupId">
                                 <section class="mb-5 bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm overflow-hidden">
                                     <header @click="toggleCollapsed(group.groupId)"
-                                        class="flex justify-between items-center px-4 py-2.5 bg-stone-300/70 dark:bg-[#c7e0da]/10 text-zinc-600 dark:text-[#c7e0da]/90 cursor-pointer select-none">
+                                        class="flex justify-between items-center px-4 py-2.5 bg-stone-300/40 dark:bg-[#c7e0da]/10 text-zinc-600 dark:text-[#c7e0da]/90 cursor-pointer select-none">
                                         <!-- the amount is the preferred item: it never wraps or shrinks;
                                              the title takes whatever room is left (min-w-0 lets it).
                                              top-[0.15em]: Roca's line box is taller above the caps than
@@ -221,7 +358,7 @@
                                                      @focusin (it bubbles, unlike focus) closes an editor left open on
                                                      another row. The editors' own controls live inside this wrapper,
                                                      so using them keeps focus in-row and the editor stays put. -->
-                                                <div class="mb-2.5 max-sm:mb-5" @focusin="rowFocused(field)">
+                                                <div class="mb-2.5 max-sm:mb-5" :data-field-id="field.id" @focusin="rowFocused(field)">
                                                         <!-- phones: rows wrap into [pin][label][value][paid][⋮] on line 1,
                                                          then spent/available/target/link on line 2 (max-sm
                                                          order utilities); desktop keeps the single DOM-order row -->
@@ -248,18 +385,21 @@
 
                                                         <div class="relative flex-1 min-w-28 max-sm:order-2">
                                                             <input type="text" x-model="field.label" placeholder="Label" :disabled="frozen"
+                                                                x-init="field.id === focusFieldId && $nextTick(() => { $el.focus(); focusFieldId = null; })"
                                                                 class="w-full border rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white dark:text-[#c7e0da] dark:focus:bg-zinc-100 focus:outline-none focus:ring-1"
-                                                                :class="group.kind === 'envelope' && overBudget(field)
+                                                                :class="FinEngine.isEnvelopeKind(group.kind) && overBudget(field)
                                                                     ? 'border-red-400 focus:ring-red-400'
                                                                     : 'border-zinc-200 focus:ring-emerald-500'">
                                                             <!-- goal budgets: subtle funding underline (partial-width
                                                                  "border" - a real border can't stop partway).
-                                                                 green while filling/funded, amber when full and idle -->
+                                                                 green while filling/funded, amber when full and idle.
+                                                                 Width is NET of this month's draws (goalBar), so
+                                                                 spending drains it like an envelope's gauge -->
                                                             <div x-show="group.kind === 'goal' && FinEngine.num(field.target) > 0"
                                                                 class="absolute bottom-[3px] left-[3px] right-[3px] h-[3px] pointer-events-none">
                                                                 <div class="h-full rounded-full transition-all duration-300"
                                                                     :class="progress(field).reached && contrib(group, field) === 0 ? 'bg-amber-400' : 'bg-emerald-400'"
-                                                                    :style="'width:' + progress(field).pct + '%'"></div>
+                                                                    :style="'width:' + goalBar(field) + '%'"></div>
                                                             </div>
                                                             <!-- envelope budgets: budget-health fuel gauge -
                                                                  % of available budget still unspent. hidden until
@@ -280,11 +420,10 @@
                                                         <template x-if="!isAuto(field) && !isSched(group, field)">
                                                             <div class="relative shrink-0 max-sm:order-3">
                                                                 <span class="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 text-xs select-none">$</span>
-                                                                <!-- cents are for income/expense amounts only; budget
-                                                                     allotments stay whole dollars. Group totals round
-                                                                     the cents away (income down, spending up). -->
-                                                                <input type="number" x-model.number="field.value" :disabled="frozen"
-                                                                    :step="FinEngine.isEnvelopeKind(group.kind) ? '1' : '0.01'"
+                                                                <!-- spinner steps whole dollars everywhere; cents can
+                                                                     still be TYPED on income/expense rows. Group totals
+                                                                     round the cents away (income down, spending up). -->
+                                                                <input type="number" x-model.number="field.value" :disabled="frozen" step="1"
                                                                     :title="group.kind === 'expense' && field.budgetId && !FinEngine.num(field.value)
                                                                         ? 'Linked to an envelope but $0 - it draws nothing until an amount is entered'
                                                                         : (group.kind === 'envelope' || group.kind === 'goal' ? 'Monthly allotment' : 'Amount')"
@@ -345,20 +484,43 @@
                                                         <template x-if="group.kind === 'expense'">
                                                             <div class="flex items-center gap-1.5 shrink-0 max-sm:order-7">
                                                                 <span class="sm:hidden shrink-0 text-[10px] uppercase tracking-widest text-zinc-350 select-none">from</span>
-                                                                <!-- accept only values that resolve to a real envelope: a
-                                                                     committed option with no value attribute falls back to
-                                                                     its TEXT ("-"), which must never land in budgetId -->
-                                                                <select @change="field.budgetId = budgetOptions.some((o) => o.id && o.id === $event.target.value) ? $event.target.value : null"
-                                                                    :disabled="frozen" title="Draw this expense from an envelope"
-                                                                    x-effect="budgetOptions; field.budgetId; $nextTick(() => { $el.value = field.budgetId || ''; })"
-                                                                    class="w-[calc(100%-24px)] sm:w-[198px] shrink-0 text-xs border border-zinc-200 rounded py-2 px-1 bg-zinc-50 cursor-pointer focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                                                                    :class="field.budgetId && 'text-emerald-700 dark:text-emerald-400/70 font-semibold'">
-                                                                    <template x-for="opt in budgetOptions" :key="opt.id">
-                                                                        <!-- x-effect, not :value - Alpine drops the value
-                                                                             ATTRIBUTE for an empty string -->
-                                                                        <option x-effect="$el.value = opt.id" :selected="opt.id === (field.budgetId || '')" x-text="opt.label"></option>
+                                                                <!-- searchable combobox (budgetPicker, month.js): long envelope
+                                                                     lists filter as you type. Selection rules match the old
+                                                                     <select>: only real envelope ids land in budgetId -->
+                                                                <!-- click.outside sits on the ROOT (not the panel): the panel
+                                                                     mounts mid-bubble of the opening click, whose target - the
+                                                                     trigger button - would read as "outside" and close it -->
+                                                                <!-- scroll closes it: the fixed panel can't track its row, and a
+                                                                     detached dropdown is worse than a dismissed one. The option
+                                                                     list's own scrolling never reaches the window (no bubbling). -->
+                                                                <div class="relative w-[calc(100%-24px)] sm:w-[198px] shrink-0" x-data="budgetPicker(field)"
+                                                                    @keydown.escape.stop="open = false" @click.outside="open = false" @scroll.window="open = false">
+                                                                    <button type="button" @click="toggle()" :disabled="frozen" title="Draw this expense from an envelope"
+                                                                        class="w-full text-left text-xs border border-zinc-200 rounded py-2 pl-2 pr-6 bg-zinc-50 dark:bg-zinc-50 cursor-pointer focus:outline-none focus:ring-1 focus:ring-emerald-500 relative"
+                                                                        :class="field.budgetId && 'text-emerald-700 dark:text-emerald-400/70 font-semibold'">
+                                                                        <span class="block truncate" x-text="selLabel"></span>
+                                                                        <svg class="w-3 h-3 absolute right-1.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none"><use href="#i-chevron"/></svg>
+                                                                    </button>
+                                                                    <template x-if="open">
+                                                                        <!-- fixed, not absolute: the group cards clip overflow -->
+                                                                        <div class="fixed z-50 bg-white dark:bg-zinc-100 border border-zinc-200 rounded-md shadow-lg overflow-hidden"
+                                                                            :style="{ left: pos.x + 'px', top: pos.y + 'px', width: pos.w + 'px', transform: pos.up ? 'translateY(-100%)' : '' }">
+                                                                            <input type="text" x-ref="search" x-model="q" @input="active = 0" placeholder="type to search…"
+                                                                                @keydown.arrow-down.prevent="move(1)" @keydown.arrow-up.prevent="move(-1)"
+                                                                                @keydown.enter.prevent="pick(filtered[active])"
+                                                                                class="w-full text-xs px-2.5 py-2 border-b border-zinc-100 bg-white dark:bg-zinc-100 focus:outline-none">
+                                                                            <ul class="max-h-48 overflow-y-auto py-1">
+                                                                                <template x-for="(opt, i) in filtered" :key="opt.id">
+                                                                                    <li @click="pick(opt)" @mouseenter="active = i"
+                                                                                        class="px-2.5 py-1.5 text-xs cursor-pointer truncate"
+                                                                                        :class="[i === active ? 'bg-emerald-50 dark:bg-emerald-500/10' : '', opt.id === (field.budgetId || '') ? 'font-semibold text-emerald-700 dark:text-emerald-400' : 'text-zinc-600']"
+                                                                                        x-text="opt.label"></li>
+                                                                                </template>
+                                                                                <li x-show="!filtered.length" class="px-2.5 py-1.5 text-xs text-zinc-400 select-none">no match</li>
+                                                                            </ul>
+                                                                        </div>
                                                                     </template>
-                                                                </select>
+                                                                </div>
                                                             </div>
                                                         </template>
 
@@ -594,7 +756,7 @@
                                             class="w-full bg-white dark:bg-zinc-100 border border-zinc-300 hover:border-zinc-500 hover:text-zinc-700 text-zinc-600 font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors disabled:text-zinc-300 disabled:border-zinc-200">Cancel editing</button>
                                     </div>
                                 </template>
-                                <div class="mt-4 uppercase font-bold text-xs tracking-widest text-zinc-400 justify-between opacity-60 hidden md:flex"><span>Save <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+S</kbd></span><span>Undo <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+Z</kbd></span><span>Redo <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+Shift+Z</kbd></span></div>
+                                <div class="mt-4 uppercase font-bold text-[11px] tracking-widest text-zinc-400 justify-between opacity-60 hidden md:flex whitespace-nowrap"><span>Save <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+S</kbd></span><span>Undo/Redo <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+(⇧)Z</kbd></span><span>Search <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+K</kbd></span></div>
                             </div>
                         </aside>
                     </div>
@@ -747,10 +909,13 @@
                     <h2 class="text-lg font-black font-brand text-zinc-700 dark:text-[#c7e0da] mb-6 leading-[32px] select-none">Settings</h2>
 
                     <div class="grid lg:grid-cols-2 gap-6 items-start">
-                        <!-- groups -->
+                        <!-- right column (lg:order-2): the shape of the books -
+                             initial savings and field groups, one pane each -->
+                        <div class="flex flex-col gap-6 lg:order-2">
+                        <!-- initial savings -->
                         <section class="bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm p-5">
                             <template x-if="draft">
-                                <div class="flex items-center justify-between gap-4 mb-5 pb-5 border-b border-zinc-100">
+                                <div class="flex items-center justify-between gap-4">
                                     <div>
                                         <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 select-none">Initial savings</h3>
                                         <p class="text-[11px] text-zinc-400 mt-0.5">What you had before your very first month. Changing it recomputes every month’s savings (a backup is taken first).</p>
@@ -773,7 +938,18 @@
                                     </template>
                                 </div>
                             </template>
+                            <!-- one draft backs both panes, so this saves everything -
+                             it appears once there's anything to save -->
+                            <div x-show="dirty" class="mt-4 flex items-center gap-3">
+                                <button type="button" @click="save()" :disabled="!dirty || $store.ui.offline"
+                                    class="bg-emerald-600 hover:bg-emerald-500 text-white dark:bg-emerald-400/70 dark:text-[#1b1e25] font-bold uppercase tracking-widest text-xs rounded-md px-5 py-2.5 cursor-pointer transition-colors disabled:bg-zinc-200 disabled:text-zinc-400 disabled:cursor-default">Save settings</button>
+                                <button type="button" @click="reset()"
+                                    class="text-xs text-zinc-400 hover:text-zinc-600 cursor-pointer">discard changes</button>
+                            </div>
+                        </section>
 
+                        <!-- field groups -->
+                        <section class="bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm p-5">
                             <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-1 select-none">Field groups</h3>
                             <p class="text-xs text-zinc-400 mb-4">Shape the app to your life - add groups like “Self-Employment Income” or “Rental Expenses”. Changes apply to open and future months; closed months keep their history.</p>
 
@@ -808,20 +984,21 @@
 
                                     <div class="mt-5 flex items-center gap-3">
                                         <button type="button" @click="save()" :disabled="!dirty || $store.ui.offline"
-                                            class="hover:bg-emerald-500 text-white dark:bg-emerald-400/70 dark:text-[#1b1e25] font-bold uppercase tracking-widest text-xs rounded-md px-5 py-2.5 cursor-pointer transition-colors disabled:bg-zinc-200 dark:disabled:bg-zinc-200 disabled:text-zinc-400 disabled:cursor-default">Save settings</button>
+                                            class="bg-emerald-600 hover:bg-emerald-500 text-white dark:bg-emerald-400/70 dark:text-[#1b1e25] font-bold uppercase tracking-widest text-xs rounded-md px-5 py-2.5 cursor-pointer transition-colors disabled:bg-zinc-200 dark:disabled:bg-zinc-200 disabled:text-zinc-400 disabled:cursor-default">Save settings</button>
                                         <button type="button" x-show="dirty" @click="reset()"
                                             class="text-xs text-zinc-400 hover:text-zinc-600 cursor-pointer">discard changes</button>
                                     </div>
                                 </div>
                             </template>
                         </section>
+                        </div>
 
-                        <!-- right column: access + data, wrapped as one grid child so
-                             Data always stays on the right and never wraps under the
-                             field groups when the (desktop-only) access pane shows.
-                             flex gap (not space-y) so the gap collapses when the access
-                             pane is display:none in web mode. -->
-                        <div class="flex flex-col gap-6">
+                        <!-- left column (lg:order-1): device & data concerns -
+                             appearance, data, access. One grid child so the panes
+                             never wrap under the field groups; flex gap (not
+                             space-y) so the gap collapses when the access pane is
+                             display:none in web mode. -->
+                        <div class="flex flex-col gap-6 lg:order-1">
                             <!-- appearance: per-device theme (localStorage, via window.Theme) -->
                             <section class="bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm p-5" x-data="{ theme: window.Theme.get() }">
                                 <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-1 select-none">Appearance</h3>
@@ -840,24 +1017,173 @@
                             <section class="bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm p-5">
                                 <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-4 select-none">Data</h3>
 
-                                <div class="text-xs text-zinc-500 mb-4 break-all">
-                                    <span class="font-bold text-zinc-400 uppercase tracking-widest text-[10px] block mb-1 select-none">Database file</span>
-                                    <!-- worth copying, so it opts out of the app-wide select-none -->
-                                    <span class="select-text" x-text="dbPath"></span>
+                                <!-- database location: local file (default) or a hosted
+                                     spendwise-server. The toggle drives which panel shows;
+                                     the mode itself only changes through Connect /
+                                     Disconnect / Switch. Hidden on web, where choice
+                                     stays 'local' so the file panel below renders. -->
+                                <div x-show="!isWeb" class="mb-4">
+                                    <span class="font-bold text-zinc-400 uppercase tracking-widest text-[10px] block mb-2 select-none">Database location</span>
+                                    <div class="inline-flex rounded-md border border-zinc-300 overflow-hidden select-none">
+                                        <button type="button" @click="remote.choice = 'local'"
+                                            class="px-4 py-1.5 text-xs font-semibold cursor-pointer transition-colors"
+                                            :class="remote.choice === 'local' ? 'bg-emerald-600 dark:bg-emerald-400/70 text-white dark:text-[#1b1e25]' : 'text-zinc-500 hover:bg-zinc-100'">Local file</button>
+                                        <button type="button" @click="remote.choice = 'remote'"
+                                            class="px-4 py-1.5 text-xs font-semibold cursor-pointer transition-colors border-l border-zinc-300"
+                                            :class="remote.choice === 'remote' ? 'bg-emerald-600 dark:bg-emerald-400/70 text-white dark:text-[#1b1e25]' : 'text-zinc-500 hover:bg-zinc-100'">Remote server</button>
+                                    </div>
                                 </div>
 
-                                <div class="flex flex-wrap gap-2">
-                                    <button x-show="!isWeb" type="button" @click="changeLocation()" class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors">Move / share database…</button>
-                                    <button x-show="!isWeb" type="button" @click="exportDb()" class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors">Export a copy…</button>
-                                    <button type="button" @click="loadBackups()" class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors">Backups…</button>
-                                    <button type="button" @click="importLegacy()" class="text-xs border border-amber-300 dark:border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 rounded-md px-3 py-2 cursor-pointer transition-colors">Import legacy data…</button>
-                                </div>
+                                <!-- local file panel: everything file-shaped lives here -->
+                                <template x-if="remote.choice === 'local'">
+                                    <div>
+                                        <div x-show="remote.connected" class="flex flex-wrap items-center gap-2 mb-4 rounded-md bg-amber-100 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-500/30 px-3 py-2">
+                                            <p class="text-[11px] text-amber-900 dark:text-amber-300 leading-relaxed w-full">
+                                                Still connected to <span class="font-mono select-text" x-text="remote.host"></span> -
+                                                apply the switch to use the local file below. Nothing on the server changes.
+                                            </p>
+                                            <button type="button" @click="switchToLocal()"
+                                                class="text-xs font-bold bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-400/70 text-white dark:text-[#1b1e25] rounded-md px-3 py-1.5 cursor-pointer transition-colors">Switch to local file</button>
+                                        </div>
 
-                                <p class="text-[11px] text-zinc-400 mt-4 leading-relaxed">
-                                    Your data is one JSON file. Point it at a synced folder (Dropbox, OneDrive, etc.) to use the same
-                                    books on several machines - the app detects when another session saved first and refuses to
-                                    overwrite it. Automatic backups are taken before every close-out, recompute, restore, and import.
-                                </p>
+                                        <div class="text-xs text-zinc-500 mb-4 break-all">
+                                            <span class="font-bold text-zinc-400 uppercase tracking-widest text-[10px] block mb-1 select-none"
+                                                x-text="isRemote ? 'Database file (on the server)' : 'Database file'"></span>
+                                            <!-- worth copying, so it opts out of the app-wide select-none -->
+                                            <span class="select-text" x-text="dbPath"></span>
+                                        </div>
+
+                                        <div class="flex flex-wrap gap-2">
+                                            <button x-show="!isWeb && !isRemote" type="button" @click="changeLocation()" class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors">Move / share database…</button>
+                                            <button x-show="!isWeb && !isRemote" type="button" @click="exportDb()" class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors">Export a copy…</button>
+                                            <button type="button" @click="loadBackups()" class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors">Backups…</button>
+                                            <button x-show="!isRemote" type="button" @click="importLegacy()" class="text-xs border border-amber-300 dark:border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 rounded-md px-3 py-2 cursor-pointer transition-colors">Import legacy data…</button>
+                                        </div>
+
+                                        <p class="text-[11px] text-zinc-400 mt-4 leading-relaxed">
+                                            Your data is one JSON file. Point it at a synced folder (Dropbox, OneDrive, etc.) to use the same books on several machines - the app detects when another session saved first and refuses to overwrite it. Automatic backups are taken before every close-out, recompute, restore, and import.
+                                        </p>
+
+                                        <!-- app password: a local-file concern (on a remote
+                                             database it belongs to the host), so it lives
+                                             inside the local panel and hides with it -->
+                                        <div x-show="!isWeb && !isRemote" class="mt-4 pt-4 border-t border-zinc-100">
+                                            <span class="font-bold text-zinc-400 uppercase tracking-widest text-[10px] block mb-1 select-none">App password</span>
+                                            <p class="text-[11px] text-zinc-400 mb-3 leading-relaxed">
+                                                Locks the app on launch - casual privacy on a shared computer - and is the login for web access.
+                                            </p>
+                                            <div class="flex flex-wrap items-end gap-2">
+                                                <label x-show="hasPassword" class="block">
+                                                    <span class="text-[10px] uppercase tracking-widest font-bold text-zinc-400 block mb-1 select-none">Current</span>
+                                                    <input type="password" x-model="pwCurrent" autocomplete="current-password"
+                                                        class="w-36 border border-zinc-200 rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                                </label>
+                                                <label class="block">
+                                                    <span class="text-[10px] uppercase tracking-widest font-bold text-zinc-400 block mb-1 select-none" x-text="hasPassword ? 'New' : 'Password'"></span>
+                                                    <input type="password" x-model="pwNew" autocomplete="new-password"
+                                                        class="w-36 border border-zinc-200 rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                                </label>
+                                                <label class="block">
+                                                    <span class="text-[10px] uppercase tracking-widest font-bold text-zinc-400 block mb-1 select-none">Confirm</span>
+                                                    <input type="password" x-model="pwConfirm" autocomplete="new-password" @keydown.enter="setPassword()"
+                                                        class="w-36 border border-zinc-200 rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                                </label>
+                                                <button type="button" @click="setPassword()"
+                                                    class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors"
+                                                    x-text="hasPassword ? 'Change password' : 'Set password'"></button>
+                                                <button type="button" x-show="hasPassword" @click="removePassword()"
+                                                    class="text-xs border border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-md px-3 py-2 cursor-pointer transition-colors">Remove…</button>
+                                            </div>
+                                        </div>
+
+                                        <!-- web access: likewise local-only - hiding with the
+                                             local panel is what tells the user it won't be
+                                             available on a remote database -->
+                                        <template x-if="web.loaded">
+                                            <div x-show="!isWeb && !isRemote" class="mt-4 pt-4 border-t border-zinc-100">
+                                                <span class="font-bold text-zinc-400 uppercase tracking-widest text-[10px] block mb-1 select-none">Web access</span>
+                                                <p class="text-[11px] text-zinc-400 mb-3 leading-relaxed">
+                                                    Serves this same app to browsers on your network - phones, laptops, family members -
+                                                    editing the very same data live (edits merge automatically). Requires the app password;
+                                                    every browser signs in with it. For access away from home, put the machine on a
+                                                    private network like Tailscale rather than exposing the port to the internet.
+                                                </p>
+                                                <div class="flex flex-wrap items-center gap-3">
+                                                    <button type="button" @click="toggleWeb()"
+                                                        class="text-xs font-bold rounded-md px-4 py-2 cursor-pointer transition-colors"
+                                                        :class="web.enabled ? 'bg-emerald-600 hover:bg-emerald-500 text-white dark:text-[#1b1e25] dark:bg-emerald-400/70' : 'border border-zinc-300 hover:bg-zinc-100 text-zinc-600'"
+                                                        x-text="web.enabled ? 'Web access: on' : 'Turn on web access'"></button>
+                                                    <label class="flex items-center gap-1.5 text-xs text-zinc-500">
+                                                        port
+                                                        <input type="number" min="1024" max="65535" x-model.number="web.port" @change="applyWebPort()"
+                                                            class="w-20 border border-zinc-200 rounded px-2 py-1.5 text-sm text-right bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                                    </label>
+                                                    <span x-show="web.enabled && web.running" class="text-[10px] uppercase tracking-widest font-bold px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 select-none">serving</span>
+                                                </div>
+                                                <div x-show="web.running" class="mt-3 text-xs text-zinc-500 space-y-0.5">
+                                                    <template x-for="url in web.urls" :key="url">
+                                                        <div class="font-mono select-text" x-text="url"></div>
+                                                    </template>
+                                                </div>
+
+                                                <details class="mt-4 group">
+                                                    <summary class="text-xs text-zinc-500 cursor-pointer select-none hover:text-zinc-700 marker:text-zinc-300">Behind a reverse proxy?</summary>
+                                                    <div class="mt-3 pl-1 space-y-3 border-l-2 border-zinc-100">
+                                                        <p class="text-xs text-zinc-400 leading-relaxed pl-3">
+                                                            Only needed if a proxy (nginx, Caddy, Apache, Cloudflare Tunnel) sits in front of
+                                                            this app. Leave the hop count at 0 for direct LAN or Tailscale access - setting it
+                                                            higher than the proxies you actually run lets a client forge its IP and dodge the
+                                                            login lockout.
+                                                        </p>
+                                                        <label class="flex items-center gap-1.5 text-xs text-zinc-500 pl-3">
+                                                            trusted proxies in front
+                                                            <input type="number" min="0" max="10" x-model.number="web.trustProxy" @change="applyWebProxy()"
+                                                                class="w-16 border border-zinc-200 rounded px-2 py-1.5 text-sm text-right bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                                        </label>
+                                                        <label class="flex items-center gap-2 text-xs text-zinc-500 pl-3 cursor-pointer">
+                                                            <input type="checkbox" x-model="web.secureCookie" @change="applyWebProxy()"
+                                                                class="rounded border-zinc-300 text-emerald-600 dark:text-emerald-400 focus:ring-emerald-500">
+                                                            force Secure cookies (auto-detected from the proxy when hops &gt; 0)
+                                                        </label>
+                                                    </div>
+                                                </details>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+
+                                <template x-if="remote.choice === 'remote'">
+                                        <div>
+                                            <template x-if="!remote.connected">
+                                                <div>
+                                                    <p class="text-[11px] text-zinc-400 mb-3 leading-relaxed">
+                                                        Use a hosted spendwise-server as this app’s database - sign in with that
+                                                        server’s app password. Your local file stays on this machine, untouched,
+                                                        until you disconnect. Use https:// (or a private network like Tailscale)
+                                                        for hosts outside your home.
+                                                    </p>
+                                                    <div class="flex flex-wrap items-center gap-2">
+                                                        <input type="text" x-model="remote.formHost" placeholder="https://budget.example.com"
+                                                            class="w-64 border border-zinc-200 rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                                        <input type="password" x-model="remote.formPassword" placeholder="App password" autocomplete="off"
+                                                            @keydown.enter="remoteConnect()"
+                                                            class="w-36 border border-zinc-200 rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                                        <button type="button" @click="remoteConnect()" :disabled="remote.busy || !remote.formHost || !remote.formPassword"
+                                                            class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-default"
+                                                            x-text="remote.busy ? 'Connecting…' : 'Connect'"></button>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                            <template x-if="remote.connected">
+                                                <div class="flex flex-wrap items-center gap-2">
+                                                    <span class="text-[10px] uppercase tracking-widest font-bold px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 select-none">connected</span>
+                                                    <span class="text-xs text-zinc-500 font-mono select-text" x-text="remote.host"></span>
+                                                    <button type="button" @click="remoteDisconnect()"
+                                                        class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-1.5 cursor-pointer transition-colors">Disconnect…</button>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
 
                                 <!-- updates -->
                                 <div class="mt-4 pt-4 border-t border-zinc-100">
@@ -900,88 +1226,6 @@
                                 </div>
                             </section>
 
-                            <!-- privacy & access -->
-                            <section x-show="!isWeb" class="bg-white dark:bg-zinc-100 rounded-lg border border-zinc-200 shadow-sm p-5">
-                                <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-1 select-none">App password</h3>
-                                <p class="text-xs text-zinc-400 mb-4 leading-relaxed">
-                                    Locks the app on launch - casual privacy on a shared computer - and is the login for web
-                                    access.
-                                </p>
-
-                                <div class="flex flex-wrap items-end gap-2">
-                                    <label x-show="hasPassword" class="block">
-                                        <span class="text-[10px] uppercase tracking-widest font-bold text-zinc-400 block mb-1 select-none">Current</span>
-                                        <input type="password" x-model="pwCurrent" autocomplete="current-password"
-                                            class="w-36 border border-zinc-200 rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                                    </label>
-                                    <label class="block">
-                                        <span class="text-[10px] uppercase tracking-widest font-bold text-zinc-400 block mb-1 select-none" x-text="hasPassword ? 'New' : 'Password'"></span>
-                                        <input type="password" x-model="pwNew" autocomplete="new-password"
-                                            class="w-36 border border-zinc-200 rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                                    </label>
-                                    <label class="block">
-                                        <span class="text-[10px] uppercase tracking-widest font-bold text-zinc-400 block mb-1 select-none">Confirm</span>
-                                        <input type="password" x-model="pwConfirm" autocomplete="new-password" @keydown.enter="setPassword()"
-                                            class="w-36 border border-zinc-200 rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                                    </label>
-                                    <button type="button" @click="setPassword()"
-                                        class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors"
-                                        x-text="hasPassword ? 'Change password' : 'Set password'"></button>
-                                    <button type="button" x-show="hasPassword" @click="removePassword()"
-                                        class="text-xs border border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-md px-3 py-2 cursor-pointer transition-colors">Remove…</button>
-                                </div>
-
-                                <template x-if="web.loaded">
-                                    <div class="mt-5 pt-5 border-t border-zinc-100">
-                                        <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-1 select-none">Web access</h3>
-                                        <p class="text-xs text-zinc-400 mb-4 leading-relaxed">
-                                            Serves this same app to browsers on your network - phones, laptops, family members -
-                                            editing the very same data live (edits merge automatically). Requires the app password;
-                                            every browser signs in with it. For access away from home, put the machine on a
-                                            private network like Tailscale rather than exposing the port to the internet.
-                                        </p>
-                                        <div class="flex flex-wrap items-center gap-3">
-                                            <button type="button" @click="toggleWeb()"
-                                                class="text-xs font-bold rounded-md px-4 py-2 cursor-pointer transition-colors"
-                                                :class="web.enabled ? 'hover:bg-emerald-500 text-white dark:text-[#1b1e25] dark:bg-emerald-400/70' : 'border border-zinc-300 hover:bg-zinc-100 text-zinc-600'"
-                                                x-text="web.enabled ? 'Web access: on' : 'Turn on web access'"></button>
-                                            <label class="flex items-center gap-1.5 text-xs text-zinc-500">
-                                                port
-                                                <input type="number" min="1024" max="65535" x-model.number="web.port" @change="applyWebPort()"
-                                                    class="w-20 border border-zinc-200 rounded px-2 py-1.5 text-sm text-right bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                                            </label>
-                                            <span x-show="web.enabled && web.running" class="text-[10px] uppercase tracking-widest font-bold px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 select-none">serving</span>
-                                        </div>
-                                        <div x-show="web.running" class="mt-3 text-xs text-zinc-500 space-y-0.5">
-                                            <template x-for="url in web.urls" :key="url">
-                                                <div class="font-mono select-text" x-text="url"></div>
-                                            </template>
-                                        </div>
-
-                                        <details class="mt-4 group">
-                                            <summary class="text-xs text-zinc-500 cursor-pointer select-none hover:text-zinc-700 marker:text-zinc-300">Behind a reverse proxy?</summary>
-                                            <div class="mt-3 pl-1 space-y-3 border-l-2 border-zinc-100">
-                                                <p class="text-xs text-zinc-400 leading-relaxed pl-3">
-                                                    Only needed if a proxy (nginx, Caddy, Apache, Cloudflare Tunnel) sits in front of
-                                                    this app. Leave the hop count at 0 for direct LAN or Tailscale access - setting it
-                                                    higher than the proxies you actually run lets a client forge its IP and dodge the
-                                                    login lockout.
-                                                </p>
-                                                <label class="flex items-center gap-1.5 text-xs text-zinc-500 pl-3">
-                                                    trusted proxies in front
-                                                    <input type="number" min="0" max="10" x-model.number="web.trustProxy" @change="applyWebProxy()"
-                                                        class="w-16 border border-zinc-200 rounded px-2 py-1.5 text-sm text-right bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                                                </label>
-                                                <label class="flex items-center gap-2 text-xs text-zinc-500 pl-3 cursor-pointer">
-                                                    <input type="checkbox" x-model="web.secureCookie" @change="applyWebProxy()"
-                                                        class="rounded border-zinc-300 text-emerald-600 dark:text-emerald-400 focus:ring-emerald-500">
-                                                    force Secure cookies (auto-detected from the proxy when hops &gt; 0)
-                                                </label>
-                                            </div>
-                                        </details>
-                                    </div>
-                                </template>
-                            </section>
                         </div>
                     </div>
                 </div>
@@ -1015,7 +1259,7 @@
             </div>
             <div class="mt-5 text-right">
                 <button type="button" @click="$store.ui.modals.recompute = false"
-                    class="hover:bg-emerald-500 text-white dark:text-[#1b1e25] font-bold uppercase tracking-widest text-xs rounded-md px-5 py-2.5 cursor-pointer transition-colors">Got it</button>
+                    class="bg-emerald-600 hover:bg-emerald-500 text-white dark:bg-emerald-400/70 dark:text-[#1b1e25] font-bold uppercase tracking-widest text-xs rounded-md px-5 py-2.5 cursor-pointer transition-colors">Got it</button>
             </div>
         </x-modal>
 
@@ -1042,7 +1286,7 @@
                     <button type="button" @click="$store.ui.modals.importMap = false"
                         class="bg-zinc-100 hover:bg-zinc-200 text-zinc-600 font-bold uppercase tracking-widest text-xs rounded-md px-4 py-2.5 cursor-pointer transition-colors">Cancel</button>
                     <button type="button" @click="runImport()"
-                        class="hover:bg-emerald-500 text-white dark:text-[#1b1e25] font-bold uppercase tracking-widest text-xs rounded-md px-4 py-2.5 cursor-pointer transition-colors">Import</button>
+                        class="bg-emerald-600 hover:bg-emerald-500 text-white dark:bg-emerald-400/70 dark:text-[#1b1e25] font-bold uppercase tracking-widest text-xs rounded-md px-4 py-2.5 cursor-pointer transition-colors">Import</button>
                 </div>
             </div>
         </x-modal>
@@ -1062,7 +1306,7 @@
             </template>
             <div class="mt-5 text-right">
                 <button type="button" @click="$store.ui.modals.importSummary = false"
-                    class="hover:bg-emerald-500 text-white dark:text-[#1b1e25] font-bold uppercase tracking-widest text-xs rounded-md px-5 py-2.5 cursor-pointer transition-colors">Nice</button>
+                    class="bg-emerald-600 hover:bg-emerald-500 text-white dark:bg-emerald-400/70 dark:text-[#1b1e25] font-bold uppercase tracking-widest text-xs rounded-md px-5 py-2.5 cursor-pointer transition-colors">Nice</button>
             </div>
         </x-modal>
 
@@ -1092,25 +1336,90 @@
             </div>
         </x-modal>
 
+        <!-- search (Ctrl+K): current month's matches first, then every other
+             month - "nothing this month, but here's every past Costco run" -->
+        <template x-if="$store.ui.searchOpen">
+            <div class="fixed inset-0 z-40 flex items-start justify-center pt-[12vh]"
+                @keydown.escape.window="$store.ui.searchOpen = false">
+                <div class="absolute inset-0 bg-zinc-900/50 dark:bg-black/60 backdrop-blur-[2px] cursor-pointer"
+                    @click="$store.ui.searchOpen = false"></div>
+                <div class="relative bg-white dark:bg-zinc-100 rounded-xl shadow-2xl w-full max-w-xl mx-4 overflow-hidden" x-data="searchView()">
+                    <input type="text" x-model="q" @input="onInput()" placeholder="Search fields and tags…"
+                        x-init="$nextTick(() => $el.focus())"
+                        @keydown.arrow-down.prevent="move(1)" @keydown.arrow-up.prevent="move(-1)"
+                        @keydown.enter.prevent="go(all[active])"
+                        class="w-full px-4 py-3.5 text-sm bg-transparent dark:text-[#c7e0da] focus:outline-none border-b border-zinc-100 placeholder:text-zinc-400">
+                    <div x-show="searched" class="max-h-[55vh] overflow-y-auto p-2">
+                        <!-- the month being viewed -->
+                        <div class="px-2 pt-1 pb-1.5 text-[10px] uppercase tracking-widest font-bold text-zinc-400 select-none"
+                            x-text="currentLabel + ' (viewing)'"></div>
+                        <p x-show="!current.length" class="px-2 pb-1 text-xs text-zinc-400 select-none">No matches this month.</p>
+                        <template x-for="(hit, i) in current" :key="'c' + i">
+                            <button type="button" @click="go(hit)" @mouseenter="active = i"
+                                class="w-full flex items-center justify-between gap-3 px-2 py-1.5 rounded-md text-left cursor-pointer"
+                                :class="active === i ? 'bg-emerald-50 dark:bg-emerald-500/10' : ''">
+                                <span class="min-w-0">
+                                    <span class="block text-sm text-zinc-700 truncate" x-text="hit.label"></span>
+                                    <span class="block text-[11px] text-zinc-400 truncate" x-text="hit.group + (hit.tags.length ? ' · #' + hit.tags.join(' #') : '')"></span>
+                                </span>
+                                <span class="text-sm font-semibold tabular-nums text-zinc-600 shrink-0" x-text="fmt(hit.value)"></span>
+                            </button>
+                        </template>
+
+                        <hr class="my-2 border-zinc-100">
+
+                        <!-- everything else, newest first -->
+                        <div class="px-2 pt-1 pb-1.5 text-[10px] uppercase tracking-widest font-bold text-zinc-400 select-none">Other months</div>
+                        <p x-show="!others.length" class="px-2 pb-1 text-xs text-zinc-400 select-none">No matches in other months.</p>
+                        <template x-for="(hit, i) in others" :key="'o' + i">
+                            <button type="button" @click="go(hit)" @mouseenter="active = current.length + i"
+                                class="w-full flex items-center justify-between gap-3 px-2 py-1.5 rounded-md text-left cursor-pointer"
+                                :class="active === current.length + i ? 'bg-emerald-50 dark:bg-emerald-500/10' : ''">
+                                <span class="min-w-0">
+                                    <span class="block text-sm text-zinc-700 truncate" x-text="hit.label"></span>
+                                    <span class="block text-[11px] text-zinc-400 truncate" x-text="hit.monthLabel + ' · ' + hit.group + (hit.tags.length ? ' · #' + hit.tags.join(' #') : '')"></span>
+                                </span>
+                                <span class="text-sm font-semibold tabular-nums text-zinc-600 shrink-0" x-text="fmt(hit.value)"></span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </template>
+
         <!-- confirm (top-most) -->
         <div x-show="$store.ui.confirm.open" x-transition.opacity.duration.150ms
             class="fixed inset-0 z-50 flex items-center justify-center"
             @keydown.escape.window="$store.ui.confirm.resolve && $store.ui.confirm.resolve(false)">
             <div class="absolute inset-0 bg-zinc-900/50 dark:bg-black/60 backdrop-blur-[2px] cursor-pointer"
                 @click="$store.ui.confirm.resolve && $store.ui.confirm.resolve(false)"></div>
-            <div class="relative bg-white dark:bg-zinc-100 rounded-xl shadow-2xl p-7 mx-4 w-full max-w-lg">
+            <!-- three-button dialogs (altText) get a wider card so the actions
+                 hold one row; phones still wrap -->
+            <div class="relative bg-white dark:bg-zinc-100 rounded-xl shadow-2xl p-7 mx-4 w-full"
+                :class="$store.ui.confirm.altText ? 'max-w-2xl' : 'max-w-lg'">
                 <h2 class="text-xl font-black font-brand text-zinc-800 mb-2" x-text="$store.ui.confirm.title"></h2>
                 <p class="text-sm text-zinc-500 leading-relaxed" x-text="$store.ui.confirm.body"></p>
-                <div class="mt-6 flex justify-end gap-2 flex-wrap">
+                <!-- optional item list: caps at ~5 rows, then scrolls -->
+                <template x-if="$store.ui.confirm.list">
+                    <ul class="mt-3 max-h-44 overflow-y-auto rounded-md border border-zinc-100 divide-y divide-zinc-100">
+                        <template x-for="(item, i) in $store.ui.confirm.list" :key="i">
+                            <li class="flex items-center justify-between gap-4 px-3 py-1.5 text-sm">
+                                <span class="text-zinc-600 truncate" x-text="item.label"></span>
+                                <span class="text-zinc-700 font-semibold tabular-nums shrink-0" x-text="item.detail"></span>
+                            </li>
+                        </template>
+                    </ul>
+                </template>
+                <div class="mt-6 flex justify-end gap-2 flex-wrap sm:flex-nowrap">
                     <button type="button" @click="$store.ui.confirm.resolve && $store.ui.confirm.resolve(false)"
-                        class="bg-zinc-100 hover:bg-zinc-200 text-zinc-600 font-bold uppercase tracking-widest text-xs rounded-md px-4 py-2.5 cursor-pointer transition-colors"
+                        class="bg-zinc-100 hover:bg-zinc-200 text-zinc-600 font-bold uppercase tracking-widest text-xs whitespace-nowrap rounded-md px-4 py-2.5 cursor-pointer transition-colors"
                         x-text="$store.ui.confirm.cancelText"></button>
                     <button type="button" x-show="$store.ui.confirm.altText"
                         @click="$store.ui.confirm.resolve && $store.ui.confirm.resolve('alt')"
-                        class="bg-red-600 hover:bg-red-500 text-white font-bold uppercase tracking-widest text-xs rounded-md px-4 py-2.5 cursor-pointer transition-colors"
+                        class="bg-red-600 hover:bg-red-500 text-white font-bold uppercase tracking-widest text-xs whitespace-nowrap rounded-md px-4 py-2.5 cursor-pointer transition-colors"
                         x-text="$store.ui.confirm.altText"></button>
                     <button type="button" @click="$store.ui.confirm.resolve && $store.ui.confirm.resolve(true)"
-                        class="text-white font-bold uppercase tracking-widest text-xs rounded-md px-4 py-2.5 cursor-pointer transition-colors"
+                        class="text-white font-bold uppercase tracking-widest text-xs whitespace-nowrap rounded-md px-4 py-2.5 cursor-pointer transition-colors"
                         :class="$store.ui.confirm.danger && !$store.ui.confirm.altText ? 'bg-red-600 hover:bg-red-500' : 'bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-400/70 dark:text-[#1b1e25]'"
                         x-text="$store.ui.confirm.confirmText"></button>
                 </div>

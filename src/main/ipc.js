@@ -1,4 +1,4 @@
-import { app, ipcMain, dialog, shell, BrowserWindow } from 'electron';
+import { app, ipcMain, dialog, shell, safeStorage, BrowserWindow } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { openDb, resolveDbPath, loadConfig, saveConfig, migrateLegacyUserData } from './storage/local.js';
@@ -6,6 +6,7 @@ import { backupDb, backupsDir } from './backup.js';
 import { importLegacy } from './migrate.js';
 import { createCore } from './api-core.js';
 import { createWebServer } from './webserver.js';
+import { createRemoteCore, remoteLogin, normalizeHost } from './remote-core.js';
 import { RELEASES_URL } from './update-check.js';
 import '../shared/engine.js';
 
@@ -16,6 +17,25 @@ const E = globalThis.FinEngine;
 export const ctx = { db: null, dbPath: null };
 export let core = null;
 export let webServer = null;
+
+// Remote mode: the shared db methods route to a hosted spendwise-server
+// instead of the local core. The local db stays open underneath (disconnect
+// is instant, nothing remote ever writes to it), but the local web server is
+// never started while remote - it would serve a stale file.
+export let remoteCore = null;
+let mode = 'local';
+
+// The session token is a bearer credential - at rest it's OS-encrypted where
+// the platform offers it (DPAPI/Keychain), plain JSON otherwise.
+const encToken = (t) => safeStorage.isEncryptionAvailable()
+    ? { tokenEnc: safeStorage.encryptString(t).toString('base64') }
+    : { token: t };
+const decToken = (r) => {
+    try {
+        if (r.tokenEnc) return safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(Buffer.from(r.tokenEnc, 'base64')) : null;
+        return r.token || null;
+    } catch { return null; }
+};
 
 const ok = (extra = {}) => ({ ok: true, ...extra });
 
@@ -41,6 +61,22 @@ export async function registerIpc () {
     ctx.version = app.getVersion();
     core = createCore(ctx);
 
+    // A saved remote connection makes this boot remote. No stored token
+    // (logged out, or the OS store couldn't decrypt it) still boots remote,
+    // but flags needsLogin - the renderer shows the password gate instead of
+    // ever falling back silently to the local file.
+    let remoteToken = null;
+    const bootRemote = loadConfig().remote;
+    if (bootRemote && bootRemote.host) {
+        remoteToken = decToken(bootRemote);
+        remoteCore = createRemoteCore({ host: bootRemote.host, token: remoteToken || '' });
+        mode = 'remote';
+    }
+    const active = () => mode === 'remote' ? remoteCore : core;
+    const localOnly = (what) => {
+        if (mode === 'remote') throw new Error(`${what} is not available with a remote database - it belongs to the machine hosting the data.`);
+    };
+
     const handle = (channel, fn) => ipcMain.handle(channel, async (event, payload) => {
         try {
             return await fn(payload || {}, event);
@@ -49,21 +85,82 @@ export async function registerIpc () {
         }
     });
 
-    // core-backed handlers (same handlers serve the web clients)
-    handle('db:load', async () => ok(await core.loadDb()));
-    handle('db:rev', async () => ok(core.rev()));
-    handle('db:saveMonth', async (p) => ok(await core.saveMonth(p)));
-    handle('db:saveClosedMonth', async (p) => ok(await core.saveClosedMonth(p)));
-    handle('db:closeMonth', async (p) => ok(await core.closeMonth(p)));
-    handle('db:saveSettings', async (p) => ok(await core.saveSettings(p)));
-    handle('db:apply-tags', async (p) => ok(await core.applyTagsEverywhere(p)));
-    handle('backups:list', async () => ok(await core.listBackups()));
-    handle('backups:restore', async (p) => ok(await core.restoreBackup(p)));
-    handle('db:migrate-legacy', async (p) => ok(await core.migrateLegacy(p)));
-    handle('auth:has', async () => ok(core.authHas()));
-    handle('auth:verify', async (p) => ok(core.authVerify(p)));
-    handle('auth:set', async (p) => ok(await core.authSet(p)));
-    handle('update:check', async (p) => ok(await core.checkUpdate(p)));
+    // preload reads this synchronously at page load → window.IS_REMOTE
+    ipcMain.on('remote:mode-sync', (e) => { e.returnValue = mode === 'remote'; });
+
+    // core-backed handlers (same handlers serve the web clients); in remote
+    // mode they proxy to the hosted server instead
+    handle('db:load', async () => ok(await active().loadDb()));
+    handle('db:rev', async () => ok(await active().rev()));
+    handle('db:saveMonth', async (p) => ok(await active().saveMonth(p)));
+    handle('db:saveClosedMonth', async (p) => ok(await active().saveClosedMonth(p)));
+    handle('db:closeMonth', async (p) => ok(await active().closeMonth(p)));
+    handle('db:saveSettings', async (p) => ok(await active().saveSettings(p)));
+    handle('db:apply-tags', async (p) => ok(await active().applyTagsEverywhere(p)));
+    handle('backups:list', async () => ok(await active().listBackups()));
+    handle('backups:restore', async (p) => ok(await active().restoreBackup(p)));
+    handle('update:check', async (p) => ok(await active().checkUpdate(p)));
+    handle('db:migrate-legacy', async (p) => { localOnly('Legacy import'); return ok(await core.migrateLegacy(p)); });
+    handle('auth:has', async () => ok(mode === 'remote' ? { hasPassword: true } : core.authHas()));
+    handle('auth:verify', async (p) => { localOnly('The lock screen'); return ok(core.authVerify(p)); });
+    handle('auth:set', async (p) => { localOnly('Password management'); return ok(await core.authSet(p)); });
+
+    // ---------------------------------------------------------- remote mode
+
+    handle('remote:status', async () => ok({
+        connected: mode === 'remote',
+        host: mode === 'remote' ? remoteCore.host : '',
+        needsLogin: mode === 'remote' && !remoteToken,
+    }));
+
+    // password gate (remote boot with no session): sign back in to the saved host
+    handle('remote:login', async ({ password }) => {
+        if (mode !== 'remote') throw new Error('Not connected to a remote database.');
+        const host = remoteCore.host;
+        const token = await remoteLogin(host, password);
+        saveConfig({ ...loadConfig(), remote: { host, ...encToken(token) } });
+        remoteCore = createRemoteCore({ host, token });
+        remoteToken = token;
+        return ok({ host });
+    });
+
+    // clears the session but keeps the host: next launch (and the reload right
+    // after) show the password gate. The server-side session is revoked too,
+    // best-effort - being offline must not block logging out locally.
+    handle('remote:logout', async () => {
+        if (mode !== 'remote') throw new Error('Not connected to a remote database.');
+        try { await remoteCore.logout(); } catch { /* offline/expired - local clear still applies */ }
+        const config = loadConfig();
+        config.remote = { host: remoteCore.host };
+        saveConfig(config);
+        remoteCore = createRemoteCore({ host: config.remote.host, token: '' });
+        remoteToken = null;
+        return ok();
+    });
+
+    handle('remote:connect', async ({ host, password }) => {
+        const h = normalizeHost(host);
+        const token = await remoteLogin(h, password); // throws on bad password/unreachable
+        const config = loadConfig();
+        // web serving is a local-db feature: stop it AND persist it off, so a
+        // later disconnect doesn't silently resume serving the local file
+        const webCfg = config.webServer ? { ...config.webServer, enabled: false } : undefined;
+        saveConfig({ ...config, ...(webCfg ? { webServer: webCfg } : {}), remote: { host: h, ...encToken(token) } });
+        remoteCore = createRemoteCore({ host: h, token });
+        remoteToken = token;
+        mode = 'remote';
+        await webServer.stop();
+        return ok({ host: h }); // the renderer reloads itself to re-enter in remote mode
+    });
+
+    handle('remote:disconnect', async () => {
+        const config = loadConfig();
+        delete config.remote;
+        saveConfig(config);
+        remoteCore = null;
+        mode = 'local';
+        return ok(); // renderer reloads; the local db has been open all along
+    });
 
     // Opening the release page is the ONLY external URL the app will launch,
     // so it's pinned to the project's own releases rather than taking a URL
@@ -77,7 +174,7 @@ export async function registerIpc () {
 
     webServer = createWebServer(ctx, core);
     const bootConfig = loadConfig();
-    if (bootConfig.webServer && bootConfig.webServer.enabled && core.authHas().hasPassword) {
+    if (mode === 'local' && bootConfig.webServer && bootConfig.webServer.enabled && core.authHas().hasPassword) {
         try {
             await webServer.start(bootConfig.webServer.port || 4180, undefined, resolveWebProxy(bootConfig));
             console.log('[web] serving on port ' + (bootConfig.webServer.port || 4180));
@@ -87,6 +184,10 @@ export async function registerIpc () {
     }
 
     handle('web:status', async () => {
+        if (mode === 'remote') {
+            // pane is hidden in remote mode; keep the response shape harmless
+            return ok({ enabled: false, port: 4180, hasPassword: false, running: false, urls: [], sessions: 0, trustProxy: 0, secureCookie: false });
+        }
         const config = loadConfig();
         return ok({
             enabled: !!(config.webServer && config.webServer.enabled),
@@ -102,6 +203,7 @@ export async function registerIpc () {
     });
 
     handle('web:set', async ({ enabled, port, trustProxy, secureCookie }) => {
+        localOnly('Web access');
         port = Math.max(1024, Math.min(65535, E.num(port) || 4180));
         if (enabled && !core.authHas().hasPassword) {
             throw new Error('Set an app password first - web access requires a login.');
@@ -124,6 +226,7 @@ export async function registerIpc () {
     // ------------------------------------------- dialog-based (desktop only)
 
     handle('backups:open-folder', async () => {
+        localOnly('The backups folder');
         const dir = backupsDir(ctx.dbPath);
         fs.mkdirSync(dir, { recursive: true });
         await shell.openPath(dir);
@@ -131,6 +234,7 @@ export async function registerIpc () {
     });
 
     handle('db:export', async (payload, event) => {
+        localOnly('Export');
         const win = BrowserWindow.fromWebContents(event.sender);
         const res = await dialog.showSaveDialog(win, {
             title: 'Export a copy of your data',
@@ -144,6 +248,7 @@ export async function registerIpc () {
 
     // Move the database to a new location (e.g. a synced folder).
     handle('db:change-location', async (payload, event) => {
+        localOnly('Moving the database');
         const win = BrowserWindow.fromWebContents(event.sender);
         const res = await dialog.showSaveDialog(win, {
             title: 'Choose where to keep db.json',
@@ -171,6 +276,7 @@ export async function registerIpc () {
     // Phase 1 of legacy import: pick the folder and report the groups found,
     // so the user can adjust each group's kind before anything is written.
     handle('db:migrate-scan', async (payload, event) => {
+        localOnly('Legacy import');
         const win = BrowserWindow.fromWebContents(event.sender);
         const res = await dialog.showOpenDialog(win, {
             title: 'Select the legacy data folder (contains files like "january-26")',

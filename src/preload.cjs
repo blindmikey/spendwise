@@ -24,4 +24,13 @@ contextBridge.exposeInMainWorld('api', {
     migrateLegacy: invoke('db:migrate-legacy'),
     checkUpdate: invoke('update:check'),
     openReleases: invoke('update:open'),
+    remoteStatus: invoke('remote:status'),
+    remoteLogin: invoke('remote:login'),
+    remoteLogout: invoke('remote:logout'),
+    remoteConnect: invoke('remote:connect'),
+    remoteDisconnect: invoke('remote:disconnect'),
 });
+
+// Remote mode changes what the renderer shows (offline handling on, local-file
+// features off) - read synchronously so the flag exists before any script runs.
+contextBridge.exposeInMainWorld('IS_REMOTE', ipcRenderer.sendSync('remote:mode-sync') === true);

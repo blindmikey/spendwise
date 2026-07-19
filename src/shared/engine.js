@@ -99,13 +99,25 @@
         return null;
     }
 
-    /** Sum of expense-field values linked (via budgetId) to an envelope field. */
+    /**
+     * What one linked expense row draws from its envelope: WHOLE dollars -
+     * cents round up per row (in cents, so float noise can't bump an exact
+     * amount) - a 3.33 grocery run takes 4. Balances stay integral when
+     * allotments are, and the rounding goes against the month, as everywhere.
+     * Shared with the month view's memoized linked-spend map - one definition,
+     * so ledger and display can't disagree.
+     */
+    function linkedDraw (value) {
+        return Math.ceil(cents(value) / 100);
+    }
+
+    /** Sum of expense-field draws linked (via budgetId) to an envelope field. */
     function linkedSpent (month, envelopeFieldId) {
         let sum = 0;
         for (const g of month.groups) {
             if (g.kind !== KIND.EXPENSE) continue;
             for (const f of g.fields) {
-                if (f.budgetId === envelopeFieldId) sum += num(f.value);
+                if (f.budgetId === envelopeFieldId) sum += linkedDraw(f.value);
             }
         }
         return sum;
@@ -769,7 +781,7 @@
         KIND, num, isEnvelopeKind, clone, truthy, uuid,
         MONTH_NAMES, nextKey, prevKey, keyLabel, monthKeys, monthIndex, addMonths, scheduledAmount,
         allFields, findField, groupOfField,
-        linkedSpent, effectiveSpent, overage,
+        linkedDraw, linkedSpent, effectiveSpent, overage,
         hasAuto, autoSourcesNet, fieldValue, applyAutoValues, contribution,
         groupTotal, monthNet, savings, unspentBudgets, savingsWithBudgets, goalProgress,
         strictFor, rolloverAvail, newField, sortedDefs, rollover,

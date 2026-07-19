@@ -41,6 +41,9 @@ if (!window.api) {
         migrateScan: call('migrateScan'),
         migrateLegacy: call('migrateLegacy'),
         checkUpdate: call('checkUpdate'),
+        // server-side session revocation; the reload after it lands on the
+        // login page (the dev preview has no sessions - logout is a no-op 200)
+        logout: call('logout'),
         // no shell here: the browser opens the release page itself
         openReleases: async () => {
             window.open('https://github.com/blindmikey/spendwise/releases/latest', '_blank', 'noopener,noreferrer');

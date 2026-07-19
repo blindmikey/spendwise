@@ -20,6 +20,7 @@ function monthView () {
         tagSuggestPos: { x: 0, y: 0 }, // fixed-position coords (group cards clip overflow)
         rowMenuFor: null,       // field id with the mobile ⋮ actions menu open
         rowMenuPos: { x: 0, y: 0 },
+        focusFieldId: null,     // freshly added row: its label input grabs focus on mount
         linkedMap: {},          // envelopeFieldId → linked expense total, one watcher
         _optCache: {},
         history: [],            // undo/redo snapshots of the current month
@@ -82,6 +83,58 @@ function monthView () {
             this.budgetOptions = next;
         },
 
+        /**
+         * Searchable "from" picker on expense rows: a combobox over the shared
+         * budgetOptions - type to filter, arrows + enter to pick, escape or an
+         * outside click to close. Same acceptance rule as the old <select>:
+         * only ids present in the options land in budgetId; '-' clears to null.
+         */
+        budgetPicker (field) {
+            return {
+                open: false,
+                q: '',
+                active: 0,
+                // fixed-position coords: group cards clip overflow (same reason
+                // the tag suggestions float), so the panel positions against
+                // the viewport - and flips above the trigger when the space
+                // below is too tight
+                pos: { x: 0, y: 0, w: 0, up: false },
+                get selLabel () {
+                    const cur = this.budgetOptions.find((o) => o.id === (field.budgetId || ''));
+                    return (cur || this.budgetOptions[0] || { label: '-' }).label;
+                },
+                get filtered () {
+                    const q = this.q.trim().toLowerCase();
+                    // searching means you want a budget: the '-' (unassign) row
+                    // shows only while the query is empty, so the first match
+                    // is always a real envelope and Enter picks it
+                    return q ? this.budgetOptions.filter((o) => o.id && o.label.toLowerCase().includes(q)) : this.budgetOptions;
+                },
+                toggle () {
+                    if (this.frozen) return;
+                    this.open = !this.open;
+                    if (this.open) {
+                        const r = this.$root.getBoundingClientRect();
+                        const below = window.innerHeight - r.bottom;
+                        const up = below < 250 && r.top > below;
+                        this.pos = { x: r.left, y: up ? r.top - 4 : r.bottom + 4, w: r.width, up };
+                        this.q = '';
+                        this.active = Math.max(0, this.budgetOptions.findIndex((o) => o.id === (field.budgetId || '')));
+                        this.$nextTick(() => this.$refs.search && this.$refs.search.focus());
+                    }
+                },
+                move (d) {
+                    if (!this.filtered.length) return;
+                    this.active = (this.active + d + this.filtered.length) % this.filtered.length;
+                },
+                pick (opt) {
+                    if (!opt) return;
+                    field.budgetId = opt.id && this.budgetOptions.some((o) => o.id === opt.id) ? opt.id : null;
+                    this.open = false;
+                },
+            };
+        },
+
         /** Income/expense groups an auto-fund rule may draw from. */
         get sourceGroups () {
             if (!this.month) return [];
@@ -101,7 +154,8 @@ function monthView () {
                 for (const g of this.month.groups) {
                     if (g.kind !== 'expense') continue;
                     for (const f of g.fields) {
-                        if (f.budgetId) map[f.budgetId] = (map[f.budgetId] || 0) + FinEngine.num(f.value);
+                        // per-row whole-dollar draw - same rule as the engine's linkedSpent
+                        if (f.budgetId) map[f.budgetId] = (map[f.budgetId] || 0) + FinEngine.linkedDraw(f.value);
                     }
                 }
             }
@@ -217,6 +271,19 @@ function monthView () {
         effSpent (field) { return FinEngine.num(field.spent) + this.linked(field); },
         overBudget (field) { return this.effSpent(field) > FinEngine.num(field.avail); },
         progress (field) { return FinEngine.goalProgress(this.month, field); },
+        /**
+         * The goal underline, net of this month's draws: spending drains the
+         * bar exactly like an envelope's gauge - empty when fully drawn,
+         * proportionally lower below that. (The "funded" text and the amber
+         * available number stay keyed on progress().reached - hitting the
+         * target this month still reads as met even once it's spent.)
+         */
+        goalBar (field) {
+            const target = FinEngine.num(field.target);
+            if (target <= 0) return 0;
+            const left = FinEngine.num(field.avail) - this.effSpent(field);
+            return Math.max(0, Math.min(100, Math.round(left / target * 100)));
+        },
         envelopeLeft (field) { return FinEngine.num(field.avail) - this.effSpent(field); },
         // fuel gauge: % of the envelope still unspent this month.
         // untouched envelopes show no gauge at all.
@@ -249,6 +316,7 @@ function monthView () {
         init () {
             // the header's month picker lives outside this component
             this.ui.monthGoto = (k) => this.goto(k);
+            this.ui.revealField = (id) => this.reveal(id);
             this.$watch('key', () => {
                 this.tagEditorFor = null;
                 this.autoEditorFor = null;
@@ -384,10 +452,57 @@ function monthView () {
 
         // ---------------------------------------------------------- fields
 
+        /**
+         * Land a search hit: collapse every group except the one holding the
+         * field, then scroll the row to centre and blink it in the brand
+         * emerald so the eye finds it. Collapse choices persist like manual
+         * toggles - the reveal IS the user reorganising the view.
+         */
+        reveal (fieldId) {
+            const g = FinEngine.groupOfField(this.month, fieldId);
+            if (!g) return;
+            for (const grp of this.month.groups) this.collapsed[grp.groupId] = grp.groupId !== g.groupId;
+            localStorage.setItem('finances.collapsedGroups', JSON.stringify(this.collapsed));
+            this.$nextTick(() => {
+                // let the x-collapse transition (200ms) settle before measuring
+                setTimeout(async () => {
+                    const el = document.querySelector(`[data-field-id="${fieldId}"]`);
+                    if (!el) return;
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // a long smooth scroll takes a while - hold the blink until
+                    // the row has actually arrived or the flash plays offscreen
+                    await new Promise((resolve) => {
+                        let last = null;
+                        let still = 0;
+                        let done = false;
+                        const finish = () => { if (!done) { done = true; resolve(); } };
+                        const stop = setTimeout(finish, 1500); // hard stop, whatever the frame rate
+                        const tick = () => {
+                            if (done) return;
+                            const top = el.getBoundingClientRect().top;
+                            if (last !== null && Math.abs(top - last) < 1) {
+                                if (++still >= 3) { clearTimeout(stop); return finish(); }
+                            } else {
+                                still = 0;
+                            }
+                            last = top;
+                            requestAnimationFrame(tick);
+                        };
+                        requestAnimationFrame(tick);
+                    });
+                    el.classList.remove('row-blink');
+                    void el.offsetWidth; // restart the animation on repeat reveals
+                    el.classList.add('row-blink');
+                    setTimeout(() => el.classList.remove('row-blink'), 2400);
+                }, 250);
+            });
+        },
+
         addField (group, index) {
             const f = FinEngine.newField(group.kind);
             group.fields.splice(index === undefined ? group.fields.length : index + 1, 0, f);
             this.closeEditors(); // a new row means you're done with the old one
+            this.focusFieldId = f.id; // the row's label input focuses itself on mount
         },
 
         /**
@@ -680,11 +795,11 @@ function monthView () {
             let carryOver;
             if (pending.length) {
                 const n = pending.length;
-                const list = pending.map((f) => `${f.label || 'unnamed'} (${fmt(f.value)})`).join(', ');
                 const answer = await confirmDialog({
                     title: n === 1 ? 'One item isn\'t marked paid / received' : `${n} items aren't marked paid / received`,
-                    body: `${list}. Mark ${n === 1 ? 'it' : 'them all'} paid / received, or move ${n === 1 ? 'it' : 'them'} to `
+                    body: `Mark ${n === 1 ? 'it' : 'them all'} paid / received, or move ${n === 1 ? 'it' : 'them'} to `
                         + `${nextLabel} so ${this.label} closes without ${n === 1 ? 'it' : 'them'}? Cancel to review yourself.`,
+                    list: pending.map((f) => ({ label: f.label || 'unnamed', detail: fmt(f.value) })),
                     confirmText: 'Mark paid / received',
                     altText: `Move to ${nextLabel}`,
                 });

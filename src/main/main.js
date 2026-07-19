@@ -6,6 +6,10 @@ import { registerIpc } from './ipc.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// test seam: point userData (config.json, default db location) at a scratch
+// folder so E2E runs never touch the real profile
+if (process.env.FINANCES_USER_DATA) app.setPath('userData', process.env.FINANCES_USER_DATA);
+
 /**
  * Closing with edits in flight would drop them silently — nothing is written
  * until Update. This has to live here rather than in the renderer: Electron

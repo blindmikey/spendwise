@@ -71,17 +71,28 @@ const LOGIN_PAGE = `<!doctype html>
     20%, 40%, 60%, 80% { transform: translateX(5px); }
   }
   form.shake { animation: shake 0.5s ease; }
-  /* the sign-in page is pre-auth, so it has no theme toggle - it follows the
-     OS. Colours mirror the app's dark palette (src/renderer/css/input.css). */
-  @media (prefers-color-scheme: dark) {
-    body { background: #1b1e25; }
-    form { background: #262a33; border-color: #333843; box-shadow: 0 10px 15px -3px rgb(0 0 0 / .4); }
-    h1 { color: #c7e0da; }
-    input { background: #1b1e25; border-color: #464c59; color: #e8eaef; }
-    input:focus { border-color: #10b981; box-shadow: 0 0 0 1px #10b981; }
-    p.err { color: #f87171; }
-  }
-</style></head><body>
+  /* the page is same-origin with the app, so it honors the app's saved theme
+     (spendwise-theme, set by the Appearance toggle after any prior login) and
+     falls back to the OS. Colours mirror src/renderer/css/input.css. */
+  html.dark body { background: #1b1e25; }
+  html.dark form { background: #262a33; border-color: #333843; box-shadow: 0 10px 15px -3px rgb(0 0 0 / .4); }
+  html.dark h1 { color: #c7e0da; }
+  html.dark input { background: #1b1e25; border-color: #464c59; color: #e8eaef; }
+  html.dark input:focus { border-color: #10b981; box-shadow: 0 0 0 1px #10b981; }
+  html.dark p.err { color: #f87171; }
+</style>
+<script>
+  (function () {
+    var mq = matchMedia('(prefers-color-scheme: dark)');
+    function pref () { try { return localStorage.getItem('spendwise-theme') || 'system'; } catch (e) { return 'system'; } }
+    function apply () {
+      var p = pref();
+      document.documentElement.classList.toggle('dark', p === 'dark' || (p === 'system' && mq.matches));
+    }
+    mq.addEventListener('change', function () { if (pref() === 'system') apply(); });
+    apply();
+  }());
+</script></head><body>
 <form id="f">
   <img class="logo" src="/renderer/assets/icon.ico" alt="" draggable="false">
   <h1>Spend Wise</h1>
@@ -112,11 +123,21 @@ const NO_PASSWORD_PAGE = `<!doctype html><html><head><meta charset="utf-8"><titl
 <style>
   body { font-family: system-ui, sans-serif; text-align:center; padding-top:4rem; color:#3f3f46; background:#fff; }
   h1 { color:#047857; font-size: 1.125rem }
-  @media (prefers-color-scheme: dark) {
-    body { background:#1b1e25; color:#c4c9d2; }
-    h1 { color:#c7e0da; }
-  }
-</style></head>
+  html.dark body { background:#1b1e25; color:#c4c9d2; }
+  html.dark h1 { color:#c7e0da; }
+</style>
+<script>
+  (function () {
+    var mq = matchMedia('(prefers-color-scheme: dark)');
+    function pref () { try { return localStorage.getItem('spendwise-theme') || 'system'; } catch (e) { return 'system'; } }
+    function apply () {
+      var p = pref();
+      document.documentElement.classList.toggle('dark', p === 'dark' || (p === 'system' && mq.matches));
+    }
+    mq.addEventListener('change', function () { if (pref() === 'system') apply(); });
+    apply();
+  }());
+</script></head>
 <body>
 <h1>Spend Wise</h1>
 <p>Web access needs an app password.<br>Set one in the desktop app under Settings → App password.</p>

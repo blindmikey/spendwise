@@ -13,7 +13,13 @@ document.addEventListener('alpine:init', () => {
 
     Alpine.store('ui', {
         view: 'month', // month | insights | settings
+        onboarding: false, // first-run wizard (fresh db - see onboarding.js)
         locked: false, // app-password lock screen (desktop only - web logs in at the server)
+        // header auth control: 'web' | 'remote' → Log out, 'lock' → re-lock, null → hidden
+        authKind: null,
+        remoteGate: false, // locked variant: sign in to the saved remote host
+        remoteHost: '',
+        searchOpen: false, // Ctrl+K field search across all months
         offline: false, // web only: no server → editing continues, saving pauses
         switching: false, // month change rendering: hides main, shows "loading…"
         settingsDirty: false, // mirrored by settingsView for the unsaved-changes gate
@@ -21,6 +27,7 @@ document.addEventListener('alpine:init', () => {
         unlockedKeys: [],
         savedSnapshot: '',
         monthGoto: null, // set by monthView: header picker → goto(key)
+        revealField: null, // set by monthView: search hit → collapse-others + scroll + blink
         recomputeChanges: [],
         importSummary: null,
         importMap: { folder: '', groups: [] },
@@ -33,7 +40,7 @@ document.addEventListener('alpine:init', () => {
         },
         confirm: {
             open: false, title: '', body: '', confirmText: 'Confirm',
-            cancelText: 'Cancel', altText: null, danger: false, resolve: null,
+            cancelText: 'Cancel', altText: null, list: null, danger: false, resolve: null,
         },
         toast: { show: false, message: '', type: 'info', timeout: 3500 },
     });
@@ -78,6 +85,20 @@ function parseHash () {
 function appRoot () {
     return {
         async init () {
+            // remote db with no live session (logged out, token expired or
+            // undecryptable): the password gate, not a failed load. The reload
+            // after signing in runs init() fresh.
+            if (window.IS_REMOTE) {
+                try {
+                    const st = unwrap(await window.api.remoteStatus());
+                    Alpine.store('ui').remoteHost = st.host || '';
+                    if (st.needsLogin) {
+                        Alpine.store('ui').locked = true;
+                        Alpine.store('ui').remoteGate = true;
+                        return;
+                    }
+                } catch { /* status unavailable - the load below reports it */ }
+            }
             try {
                 const res = unwrap(await window.api.loadDb());
                 const data = Alpine.store('data');
@@ -101,7 +122,17 @@ function appRoot () {
                 }
                 ui.savedSnapshot = JSON.stringify(res.data.months[ui.currentKey]);
                 // desktop privacy lock; web clients authenticated at the server
-                ui.locked = !!(res.data.settings && res.data.settings.auth) && !window.IS_WEB;
+                // web clients log in at the server; remote desktop authenticated
+                // at connect time - only a purely local db uses the lock screen
+                ui.locked = !!(res.data.settings && res.data.settings.auth) && !window.IS_WEB && !window.IS_REMOTE;
+                // header auth control: web and remote sessions can log out;
+                // a passworded local db can re-lock; otherwise nothing shows.
+                // The dev preview is "web" with no auth at all - no control.
+                ui.authKind = window.IS_WEB ? (window.IS_DEV_PREVIEW ? null : 'web')
+                    : window.IS_REMOTE ? 'remote'
+                        : (res.data.settings && res.data.settings.auth) ? 'lock' : null;
+                // a never-touched database gets the first-run wizard
+                ui.onboarding = isFreshDb(res.data);
 
                 // reactive persistence: fires on any view/month change, whatever
                 // its origin (nav, header picker, close-out advancing the month).
@@ -135,12 +166,45 @@ function appRoot () {
                     if (location.hash !== desired) setHash('replaceState', desired);
                 });
             } catch (e) {
+                // a dead remote session (server restarted, token revoked)
+                // becomes the password gate rather than a broken screen
+                if (window.IS_REMOTE && /session expired/i.test(e.message || '')) {
+                    Alpine.store('ui').locked = true;
+                    Alpine.store('ui').remoteGate = true;
+                    return;
+                }
                 showToast('Failed to load data: ' + e.message, 'error', 12000);
             }
             this.watchConnection();
             this.startPolling();
             this.guardUnsaved();
             this.checkUpdate(); // deliberately not awaited - never delays first paint
+        },
+
+        /**
+         * The header auth control. 'lock' just re-covers the screen (state
+         * stays put); web/remote log out for real - the session is revoked
+         * and the reload lands on the login page / password gate. Logging
+         * out reloads, so unsaved edits get an explicit discard confirm.
+         */
+        async authAction () {
+            const ui = Alpine.store('ui');
+            if (ui.authKind === 'lock') { ui.locked = true; return; }
+            const unsaved = window.__unsavedSummary && window.__unsavedSummary();
+            if (unsaved) {
+                const okOut = await confirmDialog({
+                    title: 'Log out with unsaved changes?',
+                    body: `Unsaved edits to ${unsaved} will be discarded.`,
+                    confirmText: 'Discard & log out', danger: true,
+                });
+                if (!okOut) return;
+            }
+            window.__skipUnsavedGuard = true; // the browser prompt would double-ask
+            try {
+                if (ui.authKind === 'remote') await window.api.remoteLogout();
+                else await window.api.logout();
+            } catch { /* revocation is best-effort - the reload enforces the gate */ }
+            window.location.reload();
         },
 
         /**
@@ -198,6 +262,7 @@ function appRoot () {
             };
             if (!window.IS_WEB) return;
             window.addEventListener('beforeunload', (e) => {
+                if (window.__skipUnsavedGuard) return; // logout already confirmed the discard
                 if (!window.__unsavedSummary()) return;
                 e.preventDefault();
                 e.returnValue = ''; // required by older browsers to trigger the prompt
@@ -205,15 +270,15 @@ function appRoot () {
         },
 
         /**
-         * A web client needs the server to persist anything, so losing it
-         * pauses saving (and the immediate-persist ops: tags, close-out,
-         * unlock) while local editing continues - the save-time merge
-         * reconciles with anything another session did in the meantime.
-         * The desktop app talks to its own process - it is never offline,
-         * even with the network down.
+         * A web client - or a desktop app on a remote database - needs the
+         * server to persist anything, so losing it pauses saving (and the
+         * immediate-persist ops: tags, close-out, unlock) while local editing
+         * continues - the save-time merge reconciles with anything another
+         * session did in the meantime. Only a desktop app on its own local
+         * file is never offline.
          */
         watchConnection () {
-            if (!window.IS_WEB) return;
+            if (!window.IS_WEB && !window.IS_REMOTE) return;
             const ui = Alpine.store('ui');
             ui.offline = navigator.onLine === false;
             // instant signal for a dropped network; the rev poll below is what
@@ -233,16 +298,24 @@ function appRoot () {
                 const data = Alpine.store('data');
                 const ui = Alpine.store('ui');
                 if (!data.loaded || ui.locked) return;
+                const networked = window.IS_WEB || window.IS_REMOTE;
                 let r;
                 try {
                     r = await window.api.rev();
                 } catch {
-                    if (window.IS_WEB) ui.offline = true; // server unreachable
+                    if (networked) ui.offline = true; // server unreachable (web fetch throws)
                     return;
                 }
-                if (window.IS_WEB && r.ok) ui.offline = false;
+                if (networked && r.ok) ui.offline = false;
+                // remote mode reports failures as { ok: false } through IPC
+                // rather than throwing - an unreachable host reads as offline,
+                // anything else (e.g. an expired session) surfaces on save
+                if (!r.ok) {
+                    if (networked && /can't reach/i.test(r.error || '')) ui.offline = true;
+                    return;
+                }
                 try {
-                    if (!r.ok || r.rev === data.db.meta.rev) return;
+                    if (r.rev === data.db.meta.rev) return;
                     const cur = ui.currentKey && data.db.months[ui.currentKey];
                     if (cur && JSON.stringify(cur) !== ui.savedSnapshot) return; // dirty - don't clobber
                     const res = unwrap(await window.api.loadDb());
@@ -259,6 +332,89 @@ function appRoot () {
 
         switchView (view) {
             Alpine.store('ui').view = view;
+        },
+
+        /** Ctrl/Cmd+K anywhere in the app toggles the search modal. */
+        searchHotkey (e) {
+            if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'k') return;
+            e.preventDefault();
+            const ui = Alpine.store('ui');
+            if (ui.locked || ui.onboarding || !Alpine.store('data').loaded) return;
+            ui.searchOpen = !ui.searchOpen;
+        },
+    };
+}
+
+/**
+ * Ctrl+K search: matches field labels and tags across EVERY month. Results
+ * split into the month being viewed (so "no matches this month" is visible
+ * information) and all other months, newest first - the point is seeing, say,
+ * every past Costco run even when the current month has none.
+ */
+function searchView () {
+    return {
+        q: '',
+        current: [],   // hits in ui.currentKey
+        others: [],    // hits in every other month, newest first
+        active: 0,     // keyboard highlight across current + others
+        searched: false, // a debounced run has completed for the current q
+        _t: null,
+
+        get all () { return this.current.concat(this.others); },
+        get currentLabel () {
+            const k = Alpine.store('ui').currentKey;
+            return k ? FinEngine.keyLabel(k) : '';
+        },
+
+        onInput () {
+            clearTimeout(this._t);
+            this._t = setTimeout(() => this.run(), 200);
+        },
+
+        run () {
+            this.active = 0;
+            const db = Alpine.store('data').db;
+            const q = this.q.trim().toLowerCase();
+            this.current = [];
+            this.others = [];
+            this.searched = !!q;
+            if (!db || !q) return;
+            const cur = Alpine.store('ui').currentKey;
+            const keys = FinEngine.monthKeys(db).slice().reverse(); // newest first
+            for (const key of keys) {
+                for (const g of db.months[key].groups) {
+                    for (const f of g.fields) {
+                        const label = (f.label || '').toLowerCase();
+                        const tags = (f.tags || []).join(' ').toLowerCase();
+                        if (!label.includes(q) && !tags.includes(q)) continue;
+                        (key === cur ? this.current : this.others).push({
+                            key,
+                            fieldId: f.id,
+                            monthLabel: FinEngine.keyLabel(key),
+                            group: g.title,
+                            label: f.label || '(unnamed)',
+                            value: FinEngine.num(f.value),
+                            tags: f.tags || [],
+                        });
+                    }
+                }
+            }
+        },
+
+        move (d) {
+            if (!this.all.length) return;
+            this.active = (this.active + d + this.all.length) % this.all.length;
+        },
+
+        async go (hit) {
+            if (!hit) return;
+            const ui = Alpine.store('ui');
+            ui.searchOpen = false;
+            ui.view = 'month';
+            if (hit.key !== ui.currentKey && ui.monthGoto) await ui.monthGoto(hit.key);
+            // landed on the hit's month (goto may have been cancelled by the
+            // unsaved-edits guard) → spotlight the row
+            if (hit.key === ui.currentKey && ui.revealField) ui.revealField(hit.fieldId);
         },
     };
 }

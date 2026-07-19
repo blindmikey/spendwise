@@ -29,9 +29,11 @@ function showToast (message, type = 'info', timeout = 3500) {
 
 /**
  * Promise-based confirm dialog backed by the shared modal in index.html.
- * confirmDialog({ title, body, confirmText, danger, altText }) → Promise
+ * confirmDialog({ title, body, confirmText, danger, altText, list }) → Promise
  * Resolves true (confirm), false (cancel), or 'alt' when the optional
  * secondary action (altText) is chosen.
+ * `list`: optional [{ label, detail }] rendered between body and buttons as
+ * a bordered list that caps at ~5 rows and scrolls beyond.
  */
 function confirmDialog (opts) {
     return new Promise((resolve) => {
@@ -41,6 +43,7 @@ function confirmDialog (opts) {
         c.confirmText = opts.confirmText || 'Confirm';
         c.cancelText = opts.cancelText || 'Cancel';
         c.altText = opts.altText || null;
+        c.list = Array.isArray(opts.list) && opts.list.length ? opts.list : null;
         c.danger = !!opts.danger;
         c.open = true;
         c.resolve = (answer) => { c.open = false; c.resolve = null; resolve(answer); };

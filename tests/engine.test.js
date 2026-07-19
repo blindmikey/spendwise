@@ -202,6 +202,25 @@ describe('rollover', () => {
         expect(E.findField(next, 'f-groc').spent).toBe(0);
     });
 
+    it('linked expenses draw whole dollars: cents ceil per row', () => {
+        const groc = E.findField(month, 'f-groc');
+        E.findField(month, 'f-food').value = 3.33;
+        expect(E.linkedSpent(month, 'f-groc')).toBe(4);
+        expect(E.effectiveSpent(month, groc)).toBe(4);
+        // per row, not on the sum: 3.33 + 2.22 → 4 + 3, not ceil(5.55) = 6
+        month.groups[3].fields.push({ id: 'f-snack', label: 'Snacks', value: 2.22, pinned: false, accounted: false, tags: [], budgetId: 'f-groc' });
+        expect(E.linkedSpent(month, 'f-groc')).toBe(7);
+        // whole amounts are untouched (no float-noise bump)
+        E.findField(month, 'f-food').value = 120;
+        E.findField(month, 'f-snack').value = 80;
+        expect(E.linkedSpent(month, 'f-groc')).toBe(200);
+        // and the envelope's rollover stays integral: 500 avail - 7 spent → 493 + 500
+        E.findField(month, 'f-food').value = 3.33;
+        E.findField(month, 'f-snack').value = 2.22;
+        const next = E.rollover(month, settings);
+        expect(E.findField(next, 'f-groc').avail).toBe(993);
+    });
+
     it('default mode: overspend does NOT penalize next month', () => {
         E.findField(month, 'f-groc').spent = 700; // 820 effective vs 500 avail
         const next = E.rollover(month, settings);

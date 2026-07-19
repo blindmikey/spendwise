@@ -1,5 +1,7 @@
-# Local budget data - real finances, never commit
+# Local budget data - real finances, never commit. The app creates a fresh
+# db.json on first run (openDb → defaultData), so nothing here belongs in git.
 preview-data/
+data/
 
 ### macOS ###
 # General

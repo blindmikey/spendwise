@@ -18,7 +18,7 @@ import { createCore } from './src/main/api-core.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = path.resolve(process.argv[2] || process.env.FINANCES_DB_PATH || 'preview-data/db.json');
-const port = Number(process.argv[3] || 4173);
+const port = Number(process.argv[3] || process.env.PORT || 4173);
 
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
 const ctx = { db: await openDb(dbPath), dbPath, version: pkg.version };
@@ -30,6 +30,7 @@ const snapshot = () => ({ data: JSON.parse(JSON.stringify(ctx.db.data)), path: c
 
 // native-dialog features are no-ops in the browser preview
 const stubs = {
+    async logout () { return {}; }, // no sessions in the dev preview
     async openBackupsFolder () { return {}; },
     async exportDb () { return { exported: null }; },
     async changeDbLocation () { return snapshot(); },
@@ -79,6 +80,14 @@ const server = http.createServer(async (req, res) => {
             '<script src="js/web-api.js"></script>\n    <script src="js/helpers.js"></script>');
         res.writeHead(200, { 'Content-Type': MIME['.html'] });
         res.end(html);
+        return;
+    }
+
+    // the dev preview has no login/sessions - flag it so the renderer knows
+    // "web" here means "no auth", and hides the Log out control
+    if (pathname === '/renderer/js/web-api.js') {
+        res.writeHead(200, { 'Content-Type': MIME['.js'] });
+        res.end(fs.readFileSync(file, 'utf8') + '\nwindow.IS_DEV_PREVIEW = true;\n');
         return;
     }
 

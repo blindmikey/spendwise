@@ -34,6 +34,24 @@
 }
 .animate-shake { animation: shake 0.5s ease; }
 
+/* search-hit spotlight: the landed row blinks the brand emerald a few times.
+   A translucent tint, so it reads correctly on both themes. The tint rides an
+   overlay that bleeds sideways across the card's padding - the group card's
+   overflow-hidden crops it flush at the rounded edges, so the flash spans the
+   full card width instead of stopping at the row bounds. */
+@keyframes row-blink {
+    0%, 100% { background-color: transparent; }
+    50% { background-color: rgb(16 185 129 / 0.18); }
+}
+.row-blink { position: relative; }
+.row-blink::before {
+    content: '';
+    position: absolute;
+    inset: -3px -1.5rem;
+    pointer-events: none;
+    animation: row-blink 0.7s ease 3;
+}
+
 /* Only the fields are meant to be selectable — dragging across a row or
    double-clicking a button shouldn't highlight the app's own words. Editable
    controls opt back in; so does anything worth copying, via `select-text`
@@ -134,9 +152,9 @@ html.dark .apexcharts-xaxistooltip { color: #e8eaef !important; background: #333
 html.dark .apexcharts-xaxistooltip-bottom:before { border-bottom-color: #464c59 !important; }
 html.dark .apexcharts-xaxistooltip-bottom:after { border-bottom-color: #333843 !important; }
 
-#wordmark span:nth-child(1) { letter-spacing: 0em; }
+#wordmark span:nth-child(1) { letter-spacing: -0.000125em; }
 #wordmark span:nth-child(2) { letter-spacing: 0.0125em; }
-#wordmark span:nth-child(3) { letter-spacing: 0em; }
+#wordmark span:nth-child(3) { letter-spacing: -0.000125em; }
 #wordmark span:nth-child(4) { letter-spacing: 0.00125em; }
 #wordmark span:nth-child(5) { letter-spacing: -0.000125em; }
 #wordmark span:nth-child(6) { letter-spacing: 0.00125em; }
