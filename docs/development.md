@@ -116,6 +116,10 @@ Node 20+ already have it, so the shim is a no-op there.
 - **`src/main/webserver.js`** - login, sessions, rate limiting, static serving.
   Runs inside the desktop app (Web access) or standalone via
   `src/server/cli.mjs`.
+- **`src/main/remote-core.js`** - the desktop app's remote-database client:
+  the same surface as `api-core`, but every method is an HTTP call to a hosted
+  server. Electron-free; `tests/remote-core.test.js` exercises it against a
+  real `createWebServer` instance.
 - **`src/main/update-check.js`** - the app's only outbound request: an
   unauthenticated GET of the GitHub releases API, compared against
   `package.json`'s version. Runs in the main/server process (one check per
@@ -142,5 +146,6 @@ Development:
 | `FINANCES_DB_PATH` | override the database location |
 | `FINANCES_E2E` | run an in-app end-to-end driver script |
 | `FINANCES_E2E_SCREENSHOT` | capture screenshots during an e2e run |
+| `FINANCES_USER_DATA` | point userData (config.json, default db) at a scratch folder so e2e runs never touch the real profile |
 
 Server variables are documented in [hosting.md](hosting.md#configuration).

@@ -12,6 +12,7 @@
 
 <div align="center">
     <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/blindmikey/spendwise/main/docs/screenshot.png">
         <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/blindmikey/spendwise/main/docs/screenshot-light.png">
         <img alt="Spend Wise" src="https://raw.githubusercontent.com/blindmikey/spendwise/main/docs/screenshot-light.png">
     </picture>
@@ -48,6 +49,21 @@ copy forward, savings gets a snapshot, and next month is waiting for you.
 into spending and income trends, per-tag averages, and your savings trajectory
 over the years.
 
+**Find anything in one keystroke.** `Ctrl+K` searches every month at once -
+this month's matches first, then the full history - so "what do we usually pay
+for insurance?" answers itself, and picking a result jumps straight to that row.
+
+**Light or dark.** A full dark theme, everywhere - charts, dialogs, even the
+sign-in screens - following your system or your explicit choice in Settings.
+
+**Starts gently.** A fresh install asks a few questions - what's in savings
+right now, how money comes in, whether to set aside self-employment taxes - and
+builds a sensible starting layout with starter rows to rename.
+
+**Keeps working offline.** Editing in a browser when the server drops? Keep
+typing - saving pauses and resumes when the connection returns, merging as
+usual.
+
 **Budget together.** Two people editing the same month merge field by field
 rather than one clobbering the other - you both keep your edits.
 
@@ -62,6 +78,11 @@ correctly, after taking a backup and showing you exactly what changed.
 Grab the latest Windows installer or portable `.exe` from
 [Releases](https://github.com/blindmikey/spendwise/releases). That's the whole
 setup - it keeps its database in `%APPDATA%/Spend Wise/db.json`.
+
+Hosting the web version somewhere? The desktop app can use that server as its
+database instead of a local file: **Settings → Data → Database location →
+Remote server**, sign in with the server's app password, and it edits the same
+live books as every browser - merges included.
 
 On macOS or Linux, run it from source (see
 [docs/development.md](docs/development.md)) or host the web version below.

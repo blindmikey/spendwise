@@ -31,6 +31,13 @@ you've backed up everything.
 
 ### Running it as a service
 
+The unit below runs as a dedicated system user - create it, along with the
+data directory it owns, first:
+
+```bash
+sudo useradd --system --home /srv/spendwise --create-home spendwise
+```
+
 A minimal systemd unit:
 
 ```ini
@@ -92,6 +99,10 @@ keeping.
 | `FINANCES_SECURE_COOKIE` | off | force `Secure` cookies (auto-detected from `X-Forwarded-Proto` when a proxy is trusted) |
 
 (The `FINANCES_*` prefix predates the rename to Spend Wise and still works.)
+
+For local testing there's also `spendwise-server --password <pw>` - a
+session-only login that is held in memory and never written to the database,
+so it can't clobber (or leak into) the real one.
 
 ## Putting it on the internet safely
 
@@ -246,5 +257,8 @@ Server mode has no native dialogs, so these live in the desktop app:
 - setting or changing the app password (also available via
   `spendwise-server --set-password`)
 
-Point the desktop app at the same file when you need them - one writer at a
-time.
+For everyday editing the desktop app doesn't need the file at all: **Settings →
+Data → Database location → Remote server** signs it into this server like any
+browser, and its edits merge with everyone else's. The dialog-based features
+above still need a desktop app running against the local file on the host -
+one writer at a time while you do.
