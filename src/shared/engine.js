@@ -142,18 +142,29 @@
 
     /**
      * Signed net of the rule's source groups (income +, expense −) at FACE
-     * value: every expense counts whether or not it is assigned to a budget.
+     * value: an expense counts whether or not it is assigned to a budget.
      * Where money is paid from (envelope vs liquid) is a ledger concern -
      * it must not move e.g. a tax-savings percentage, because an expense is
      * still an expense for tax purposes when it draws from an envelope.
+     *
+     * ONE exception: expenses drawn from the auto-funded envelope ITSELF
+     * (selfId). Those are distributions of money the rule already set aside -
+     * a quarterly estimated-tax payment out of the tax-savings envelope is
+     * not new deductible activity, and counting it would zero the very
+     * set-aside that pays it. Excluding only the self-link breaks that
+     * feedback loop while leaving every other envelope-drawn expense (a
+     * laptop from the office budget) reducing the net as a real expense.
      */
-    function autoSourcesNet (month, rule) {
+    function autoSourcesNet (month, rule, selfId) {
         let net = 0;
         for (const gid of rule.groups || []) {
             const g = month.groups.find((g) => g.groupId === gid);
             if (!g || isEnvelopeKind(g.kind)) continue; // sources are income/expense groups
             let t = 0;
-            for (const f of g.fields) t += num(f.value);
+            for (const f of g.fields) {
+                if (g.kind === KIND.EXPENSE && selfId && f.budgetId === selfId) continue;
+                t += num(f.value);
+            }
             net += (g.kind === KIND.INCOME) ? t : -t;
         }
         return net;
@@ -165,7 +176,7 @@
      */
     function fieldValue (month, field) {
         if (hasAuto(field)) {
-            return Math.round(Math.max(0, autoSourcesNet(month, field.auto)) * num(field.auto.pct) / 100);
+            return Math.round(Math.max(0, autoSourcesNet(month, field.auto, field.id)) * num(field.auto.pct) / 100);
         }
         return num(field.value);
     }

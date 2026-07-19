@@ -749,23 +749,40 @@ describe('recomputeForward', () => {
 // ------------------------------------------------------- auto-funded fields
 
 describe('auto-funded fields', () => {
-    // fixture: income 2500, expenses at FACE value 920 (rent 800 + linked food
-    // 120 — budget links must not move the rate) → net of both = 1580
+    // fixture: income 2500, expenses at FACE value 920 (rent 800 + food 120).
+    // Food is linked to f-groc - the auto-funded envelope ITSELF - so it is a
+    // distribution of already-set-aside money and does NOT reduce the rule's
+    // net: 2500 − 800 = 1700. Unlink it (or link it elsewhere) and it counts
+    // like any expense: 2500 − 920 = 1580.
     const rule = { pct: 33, groups: ['g-inc', 'g-exp'] };
 
     it('derives the value from a percentage of source-group net', () => {
         const groc = E.findField(month, 'f-groc');
         groc.auto = rule;
-        expect(E.fieldValue(month, groc)).toBe(Math.round(1580 * 0.33)); // 521
-        expect(E.groupTotal(month, month.groups[1])).toBe(521);
+        expect(E.fieldValue(month, groc)).toBe(Math.round(1700 * 0.33)); // 561 - self-linked food excluded
+        expect(E.groupTotal(month, month.groups[1])).toBe(561);
     });
 
-    it('assigning a source expense to a budget does not change the rate', () => {
+    it('expenses drawn from OTHER envelopes still reduce the rate', () => {
         const groc = E.findField(month, 'f-groc');
         groc.auto = rule;
-        const linked = E.fieldValue(month, groc);   // food is linked to f-groc
-        E.findField(month, 'f-food').budgetId = null;
-        expect(E.fieldValue(month, groc)).toBe(linked); // unlinked: same rate
+        E.findField(month, 'f-food').budgetId = 'f-garb'; // a different envelope
+        expect(E.fieldValue(month, groc)).toBe(Math.round(1580 * 0.33)); // 521
+        E.findField(month, 'f-food').budgetId = null;      // unlinked: same
+        expect(E.fieldValue(month, groc)).toBe(521);
+    });
+
+    it('paying from the rule\'s own envelope does not zero the set-aside (estimated taxes)', () => {
+        // the gotcha: a tax-savings envelope funded by % of SE net, and the
+        // quarterly estimated-tax payment recorded as a source-group expense
+        // DRAWN FROM that envelope - it must not shrink its own funding basis
+        const groc = E.findField(month, 'f-groc');
+        groc.auto = rule;
+        month.groups[3].fields.push({
+            id: 'f-est-tax', label: 'Estimated taxes Q2', value: 1700,
+            pinned: false, accounted: false, tags: [], budgetId: 'f-groc',
+        });
+        expect(E.fieldValue(month, groc)).toBe(Math.round(1700 * 0.33)); // still 561, not 0
     });
 
     it('inactive/incomplete rules fall back to the stored value', () => {
@@ -786,15 +803,15 @@ describe('auto-funded fields', () => {
         const groc = E.findField(month, 'f-groc');
         groc.auto = rule;
         E.applyAutoValues(month);
-        expect(groc.value).toBe(521);
+        expect(groc.value).toBe(561); // self-linked food excluded from the net
     });
 
     it('rollover contributes the derived value to next month\'s balance', () => {
         const groc = E.findField(month, 'f-groc');
         groc.auto = rule;
-        // avail 500, linked spent 120 → remain 380; contribution 521 → 901
+        // avail 500, linked spent 120 → remain 380; contribution 561 → 941
         const next = E.rollover(month, settings);
-        expect(E.findField(next, 'f-groc').avail).toBe(901);
+        expect(E.findField(next, 'f-groc').avail).toBe(941);
         expect(E.findField(next, 'f-groc').auto).toEqual(rule); // rule carries forward
     });
 
@@ -810,10 +827,11 @@ describe('auto-funded fields', () => {
             months: { '2026-06': month, '2026-07': next },
             savingsHistory: { '2026-06': 1000, '2026-07': next.startingSavings },
         };
-        // edit June income: 2000 → 3000 (+1000) → face net 3500 − 920 = 2580 → auto 851
+        // edit June income: 2000 → 3000 (+1000) → net 3500 − 800 = 2700 (the
+        // self-linked food stays excluded) → auto 891
         E.findField(db.months['2026-06'], 'f-pay').value = 3000;
         const { db: out } = E.recomputeForward(db, '2026-06');
-        expect(E.findField(out.months['2026-06'], 'f-groc').value).toBe(Math.round(2580 * 0.33));
+        expect(E.findField(out.months['2026-06'], 'f-groc').value).toBe(Math.round(2700 * 0.33));
         // July's balance = June remain (380) + July's OWN auto rate — derived
         // from July's sources (2000 income − 800 rent = 1200 → 396). June's
         // higher rate belongs to June's balance (adjusted live in the UI).
