@@ -271,6 +271,50 @@ describe('rollover', () => {
     });
 });
 
+// -------------------------------------------- income routed into a budget
+
+describe('income routed into a budget', () => {
+    it('a linked income row is excluded from the income total', () => {
+        E.findField(month, 'f-side').budgetId = 'f-groc';
+        expect(E.groupTotal(month, month.groups[0])).toBe(2000); // 2500 − routed 500
+    });
+
+    it('deposits into the envelope through effectiveSpent, floored to whole dollars', () => {
+        const groc = E.findField(month, 'f-groc');
+        const side = E.findField(month, 'f-side');
+        side.budgetId = 'f-groc';
+        side.value = 500.75; // income never flatters: deposits floor
+        expect(E.linkedIncome(month, 'f-groc')).toBe(500);
+        // spent 0 + food draw 120 − deposit 500 = −380 → available 500 − (−380) = 880
+        expect(E.effectiveSpent(month, groc)).toBe(-380);
+        expect(E.num(groc.avail) - E.effectiveSpent(month, groc)).toBe(880);
+        expect(E.overage(month, groc)).toBe(0);
+    });
+
+    it('is exactly equivalent to receiving the money and raising the allotment', () => {
+        // manual method: +500 income, allotment 500 → 1000
+        const manual = E.clone(month);
+        E.findField(manual, 'f-groc').value = 1000;
+        // routed method: the same 500 pointed at the envelope
+        E.findField(month, 'f-side').budgetId = 'f-groc';
+        expect(E.savings(month)).toBe(E.savings(manual)); // liquid identical
+    });
+
+    it('the boosted balance rolls into next month', () => {
+        E.findField(month, 'f-side').budgetId = 'f-groc';
+        const next = E.rollover(month, settings);
+        // remain = 500 − (120 − 500) = 880 → next avail = 500 + 880
+        expect(E.findField(next, 'f-groc').avail).toBe(1380);
+    });
+
+    it('a deposit can push a goal past its target (a real gift is real money)', () => {
+        E.findField(month, 'f-side').budgetId = 'f-garb'; // goal: avail 100, target 150
+        const garb = E.findField(month, 'f-garb');
+        expect(E.num(garb.avail) - E.effectiveSpent(month, garb)).toBe(600);
+        expect(E.goalProgress(month, garb).reached).toBe(false); // avail itself unchanged until rollover
+    });
+});
+
 // -------------------------------------------------------------- carry-over
 
 describe('close-time carry-over', () => {

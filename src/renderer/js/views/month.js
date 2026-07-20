@@ -149,13 +149,18 @@ function monthView () {
          * every expense row on each change (the other half of the ~1s lag).
          */
         get linkedSignature () {
+            // envelopeId → [draws, deposits], kept separate so SPENT can show
+            // pure outflow while AVAILABLE surfaces the routed-income bump
             const map = {};
             if (this.month) {
                 for (const g of this.month.groups) {
-                    if (g.kind !== 'expense') continue;
                     for (const f of g.fields) {
-                        // per-row whole-dollar draw - same rule as the engine's linkedSpent
-                        if (f.budgetId) map[f.budgetId] = (map[f.budgetId] || 0) + FinEngine.linkedDraw(f.value);
+                        if (!f.budgetId) continue;
+                        const e = map[f.budgetId] || (map[f.budgetId] = [0, 0]);
+                        // whole-dollar per row, same rules as the engine:
+                        // expense draws ceil, routed income deposits floor
+                        if (g.kind === 'expense') e[0] += FinEngine.linkedDraw(f.value);
+                        if (g.kind === 'income') e[1] += FinEngine.linkedDeposit(f.value);
                     }
                 }
             }
@@ -267,8 +272,13 @@ function monthView () {
         },
 
         groupTotal (group) { return FinEngine.groupTotal(this.month, group); },
-        linked (field) { return this.linkedMap[field.id] || 0; },
-        effSpent (field) { return FinEngine.num(field.spent) + this.linked(field); },
+        linkedDraws (field) { return (this.linkedMap[field.id] || [0, 0])[0]; },
+        deposits (field) { return (this.linkedMap[field.id] || [0, 0])[1]; },
+        // pure outflow - what the SPENT column reports
+        spentOnly (field) { return FinEngine.num(field.spent) + this.linkedDraws(field); },
+        // engine parity (deposits ride as negative spending): drives
+        // overdraw, goal drain and the true remaining balance
+        effSpent (field) { return this.spentOnly(field) - this.deposits(field); },
         overBudget (field) { return this.effSpent(field) > FinEngine.num(field.avail); },
         progress (field) { return FinEngine.goalProgress(this.month, field); },
         /**
@@ -285,14 +295,13 @@ function monthView () {
             return Math.max(0, Math.min(100, Math.round(left / target * 100)));
         },
         envelopeLeft (field) { return FinEngine.num(field.avail) - this.effSpent(field); },
-        // fuel gauge: % of the envelope still unspent this month.
-        // untouched envelopes show no gauge at all.
+        // fuel gauge: % of the envelope still unspent this month. Untouched
+        // envelopes show no gauge; a routed-income bump raises the tank size.
         health (field) {
-            const avail = FinEngine.num(field.avail);
-            const spent = this.effSpent(field);
-            const left = avail - spent;
+            const avail = FinEngine.num(field.avail) + this.deposits(field);
+            const left = avail - this.spentOnly(field);
             const pct = avail > 0 ? Math.max(0, Math.min(100, (left / avail) * 100)) : 0;
-            return { pct, empty: left <= 0, show: spent > 0 };
+            return { pct, empty: left <= 0, show: this.spentOnly(field) > 0 };
         },
         // NOTE: do not name helpers after Object.prototype members (valueOf,
         // toString…) - inside Alpine's `with`-based expression scope they
@@ -304,10 +313,10 @@ function monthView () {
 
         groupHint (kind) {
             return {
-                income: 'All income for the month (rounds down). <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75 inline-block -mt-1"><svg class="w-3.5 h-3.5 inline-block -mt-1 pt-px"><use href="#i-pin"/></svg></kbd> Pin recurring sources so they carry forward. <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75 inline-block -mt-1"><svg class="w-3.5 h-3.5 inline-block -mt-1 pt-px"><use href="#i-check"/></svg></kbd> Mark income as it\'s paid or received.',
+                income: 'All income for the month. <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75 inline-block -mt-1"><svg class="w-3.5 h-3.5 inline-block -mt-1 pt-px"><use href="#i-pin"/></svg></kbd> Pin recurring sources so they carry forward. Assign one to an envelope and it boosts that envelope\'s budget instead. <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75 inline-block -mt-1"><svg class="w-3.5 h-3.5 inline-block -mt-1 pt-px"><use href="#i-check"/></svg></kbd> Mark income as it\'s received.',
                 envelope: 'Little savings accounts: Spending flows in automatically from expenses assigned to the envelope. Use <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75 inline-block -mt-1"><svg class="w-3.5 h-3.5 inline-block -mt-1 pt-px"><use href="#i-percent"/></svg></kbd> to auto-fund from a percentage of other groups.',
                 goal: 'Envelope budgets with a cap - ideal for recurring bills. Use <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75 inline-block -mt-1"><svg class="w-3.5 h-3.5 inline-block -mt-1 pt-px"><use href="#i-clock"/></svg></kbd> to set a due date and the monthly deposit is calculated for you and re-spread each cycle.',
-                expense: 'All expenses for the month (rounds up). <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75 inline-block -mt-1"><svg class="w-3.5 h-3.5 inline-block -mt-1 pt-px"><use href="#i-pin"/></svg></kbd> Pin recurring ones. Assign one to an envelope and it spends from that envelope’s balance instead. <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75 inline-block -mt-1"><svg class="w-3.5 h-3.5 inline-block -mt-1 pt-px"><use href="#i-check"/></svg></kbd> Mark expenses as they\'re spent.',
+                expense: 'All expenses for the month. <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75 inline-block -mt-1"><svg class="w-3.5 h-3.5 inline-block -mt-1 pt-px"><use href="#i-pin"/></svg></kbd> Pin recurring expenses. Assign one to an envelope and it spends from that envelope’s balance instead. <kbd class="border border-zinc-300 rounded-sm py-0.5 px-0.75 inline-block -mt-1"><svg class="w-3.5 h-3.5 inline-block -mt-1 pt-px"><use href="#i-check"/></svg></kbd> Mark expenses as they\'re spent.',
             }[kind] || '';
         },
 

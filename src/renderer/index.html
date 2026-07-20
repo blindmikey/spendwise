@@ -266,6 +266,12 @@
                                         class="w-2 h-2 rounded-full bg-emerald-500"></span>
                                 </button>
                             </template>
+                            <!-- the auth control rides along on phones -->
+                            <template x-if="$store.ui.authKind">
+                                <button type="button" @click="navOpen = false; authAction()"
+                                    class="w-full text-left px-3 py-2 text-sm cursor-pointer text-zinc-600 border-t border-zinc-100"
+                                    x-text="$store.ui.authKind === 'lock' ? 'Lock the app' : 'Log out'"></button>
+                            </template>
                         </div>
                     </template>
                 </div>
@@ -273,7 +279,7 @@
                      db with a password). Hidden when there's nothing to leave. -->
                 <button type="button" x-show="$store.ui.authKind" @click="authAction()"
                     :title="$store.ui.authKind === 'lock' ? 'Lock the app' : 'Log out'"
-                    class="p-1.5 rounded-md transition-colors cursor-pointer text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700">
+                    class="max-sm:hidden p-1.5 rounded-md transition-colors cursor-pointer text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700">
                     <!-- arrow-right-from-bracket, Font Awesome Free (same licence note as the sprite above) -->
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="currentColor" class="w-5 h-5" aria-hidden="true">
                         <path d="M377.9 105.9L500.7 228.7c7.2 7.2 11.3 17.1 11.3 27.3s-4.1 20.1-11.3 27.3L377.9 406.1c-6.4 6.4-15 9.9-24 9.9c-18.7 0-33.9-15.2-33.9-33.9l0-62.1-128 0c-17.7 0-32-14.3-32-32l0-64c0-17.7 14.3-32 32-32l128 0 0-62.1c0-18.7 15.2-33.9 33.9-33.9c9 0 17.6 3.6 24 9.9zM160 96L96 96c-17.7 0-32 14.3-32 32l0 256c0 17.7 14.3 32 32 32l64 0c17.7 0 32 14.3 32 32s-14.3 32-32 32l-64 0c-53 0-96-43-96-96L0 128C0 75 43 32 96 32l64 0c17.7 0 32 14.3 32 32s-14.3 32-32 32z"/>
@@ -450,18 +456,21 @@
                                                             <div class="max-sm:order-6 max-sm:flex max-sm:items-center max-sm:gap-1.5 shrink-0 sm:contents">
                                                                 <span class="sm:hidden shrink-0 text-[10px] uppercase tracking-widest text-zinc-350 select-none">spent</span>
                                                                 <span class="w-24 max-sm:w-auto shrink-0 text-right text-xs tabular-nums select-none"
-                                                                    :class="effSpent(field) > 0 ? (overBudget(field) ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-emerald-600 dark:text-emerald-400') : 'text-zinc-300'"
+                                                                    :class="spentOnly(field) > 0 ? (overBudget(field) ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-emerald-600 dark:text-emerald-400') : 'text-zinc-300'"
                                                                     :title="'Spent from this envelope - expense rows assigned to it via the “from” dropdown' + (FinEngine.num(field.spent) > 0 ? ' (includes ' + fmt(field.spent) + ' carried from the legacy import)' : '')"
-                                                                    x-text="fmt(effSpent(field))"></span>
+                                                                    x-text="fmt(spentOnly(field))"></span>
                                                             </div>
                                                         </template>
                                                         <template x-if="group.kind === 'envelope' || group.kind === 'goal'">
                                                             <div class="max-sm:order-6 max-sm:flex max-sm:items-center max-sm:gap-1.5 shrink-0 sm:contents">
                                                                 <span class="sm:hidden shrink-0 text-[10px] uppercase tracking-widest text-zinc-350 select-none">available</span>
-                                                                <span class="w-24 max-sm:w-auto shrink-0 text-right text-xs dark:text-[#c7e0da] tabular-nums font-semibold select-none"
+                                                                <!-- a routed-income bump shows as "base + bump", so the
+                                                                     one-off is visible rather than silently folded in -->
+                                                                <span class="w-24 max-sm:w-auto shrink-0 text-right text-xs dark:text-[#c7e0da] tabular-nums font-semibold select-none whitespace-nowrap"
                                                                     :class="overBudget(field) ? 'text-red-600 dark:text-red-400' : (progress(field).reached ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-600')"
-                                                                    :title="progress(field).reached ? 'At the cap - holds here until spent' : 'Available in this envelope right now'"
-                                                                    x-text="fmt(field.avail)"></span>
+                                                                    :title="(deposits(field) > 0 ? fmt(deposits(field)) + ' routed straight in from income this month. ' : '')
+                                                                        + (progress(field).reached ? 'At the cap - holds here until spent' : 'Available in this envelope right now')"
+                                                                    x-text="deposits(field) > 0 ? fmt(field.avail) + ' + ' + fmt(deposits(field)) : fmt(field.avail)"></span>
                                                             </div>
                                                         </template>
 
@@ -478,16 +487,18 @@
                                                             </div>
                                                         </template>
 
-                                                        <!-- expense: draw from envelope. On phones it needs a label -
-                                                             an unlinked row is just a lone "-" otherwise. "from" is
-                                                             what this control is called elsewhere in the UI copy. -->
-                                                        <template x-if="group.kind === 'expense'">
+                                                        <!-- expense: draw FROM an envelope. income: route the amount
+                                                             TO a budget instead of liquid savings (one-off top-ups -
+                                                             the Venmo that's really for Dining Out). On phones it
+                                                             needs a label - an unlinked row is a lone "-" otherwise. -->
+                                                        <template x-if="group.kind === 'expense' || group.kind === 'income'">
                                                             <!-- max-sm:w-full: on phones this pair owns its own wrapped
                                                                  line, and the combobox (unlike the old <select>) has no
                                                                  intrinsic option width - without a real width from the
                                                                  parent it collapses to a character -->
                                                             <div class="flex items-center gap-1.5 shrink-0 max-sm:w-full max-sm:order-7">
-                                                                <span class="sm:hidden shrink-0 text-[10px] uppercase tracking-widest text-zinc-350 select-none">from</span>
+                                                                <span class="sm:hidden shrink-0 text-[10px] uppercase tracking-widest text-zinc-350 select-none"
+                                                                    x-text="group.kind === 'expense' ? 'from' : 'to'"></span>
                                                                 <!-- searchable combobox (budgetPicker, month.js): long envelope
                                                                      lists filter as you type. Selection rules match the old
                                                                      <select>: only real envelope ids land in budgetId -->
@@ -499,7 +510,10 @@
                                                                      list's own scrolling never reaches the window (no bubbling). -->
                                                                 <div class="relative max-sm:flex-1 max-sm:min-w-0 sm:w-[198px] shrink-0" x-data="budgetPicker(field)"
                                                                     @keydown.escape.stop="open = false" @click.outside="open = false" @scroll.window="open = false">
-                                                                    <button type="button" @click="toggle()" :disabled="frozen" title="Draw this expense from an envelope"
+                                                                    <button type="button" @click="toggle()" :disabled="frozen"
+                                                                        :title="group.kind === 'expense'
+                                                                            ? 'Draw this expense from an envelope'
+                                                                            : 'Deposit this income straight into a budget - it skips liquid savings'"
                                                                         class="w-full text-left text-xs border border-zinc-200 rounded py-2 pl-2 pr-6 bg-zinc-50 dark:bg-zinc-50 cursor-pointer focus:outline-none focus:ring-1 focus:ring-emerald-500 relative"
                                                                         :class="field.budgetId && 'text-emerald-700 dark:text-emerald-400/70 font-semibold'">
                                                                         <span class="block truncate" x-text="selLabel"></span>

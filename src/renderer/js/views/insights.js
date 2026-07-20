@@ -153,13 +153,15 @@ function insightsView () {
             for (const g of month.groups) {
                 if (!FinEngine.isEnvelopeKind(g.kind)) continue;
                 for (const f of g.fields) {
-                    const spent = FinEngine.effectiveSpent(month, f);
+                    // spent = pure outflow; routed income raises the pot instead
+                    const spent = FinEngine.num(f.spent) + FinEngine.linkedSpent(month, f.id);
+                    const avail = FinEngine.num(f.avail) + FinEngine.linkedIncome(month, f.id);
                     out.push({
                         label: f.label || '(unnamed)',
                         kind: g.kind,
-                        avail: FinEngine.num(f.avail),
+                        avail,
                         spent,
-                        left: FinEngine.num(f.avail) - spent,
+                        left: avail - spent,
                         target: FinEngine.num(f.target),
                         progress: g.kind === 'goal' ? FinEngine.goalProgress(month, f) : null,
                     });

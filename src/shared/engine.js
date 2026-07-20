@@ -123,9 +123,37 @@
         return sum;
     }
 
-    /** Manual spent + spending recorded through linked expense fields. */
+    /**
+     * The mirror image: an INCOME row linked to a budget deposits its amount
+     * straight into that balance instead of liquid savings (a one-off Venmo
+     * earmarked for Dining Out). Whole dollars, floored - income never
+     * flatters. The row is excluded from the income group's total (see
+     * groupTotal), so the month's savings are exactly as if the money had
+     * been received and the allotment raised by hand.
+     */
+    function linkedDeposit (value) {
+        return Math.floor(cents(value) / 100);
+    }
+
+    function linkedIncome (month, envelopeFieldId) {
+        let sum = 0;
+        for (const g of month.groups) {
+            if (g.kind !== KIND.INCOME) continue;
+            for (const f of g.fields) {
+                if (f.budgetId === envelopeFieldId) sum += linkedDeposit(f.value);
+            }
+        }
+        return sum;
+    }
+
+    /**
+     * Manual spent + spending through linked expense rows, MINUS income routed
+     * directly in. Deposits ride the same channel as negative spending, so
+     * everything downstream - available, overage, rollover, unspent budgets -
+     * sees them without special cases.
+     */
     function effectiveSpent (month, field) {
-        return num(field.spent) + linkedSpent(month, field.id);
+        return num(field.spent) + linkedSpent(month, field.id) - linkedIncome(month, field.id);
     }
 
     /** Spending beyond what the envelope held - counts against this month once. */
@@ -234,7 +262,10 @@
     function groupTotal (month, group) {
         let c = 0;
         if (group.kind === KIND.INCOME) {
-            for (const f of group.fields) c += cents(f.value);
+            // budget-linked income deposits straight into its envelope - it
+            // never lands in liquid, so it can't count here (mirror of the
+            // linked-expense exclusion below)
+            for (const f of group.fields) { if (!f.budgetId) c += cents(f.value); }
             return Math.floor(c / 100);
         }
         if (group.kind === KIND.EXPENSE) {
@@ -792,7 +823,7 @@
         KIND, num, isEnvelopeKind, clone, truthy, uuid,
         MONTH_NAMES, nextKey, prevKey, keyLabel, monthKeys, monthIndex, addMonths, scheduledAmount,
         allFields, findField, groupOfField,
-        linkedDraw, linkedSpent, effectiveSpent, overage,
+        linkedDraw, linkedSpent, linkedDeposit, linkedIncome, effectiveSpent, overage,
         hasAuto, autoSourcesNet, fieldValue, applyAutoValues, contribution,
         groupTotal, monthNet, savings, unspentBudgets, savingsWithBudgets, goalProgress,
         strictFor, rolloverAvail, newField, sortedDefs, rollover,
