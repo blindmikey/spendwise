@@ -22,6 +22,7 @@ document.addEventListener('alpine:init', () => {
         searchOpen: false, // Ctrl+K field search across all months
         offline: false, // web only: no server → editing continues, saving pauses
         switching: false, // month change rendering: hides main, shows "loading…"
+        closingMonth: false, // close-out in flight: the rev poll must not interleave
         settingsDirty: false, // mirrored by settingsView for the unsaved-changes gate
         currentKey: null,
         unlockedKeys: [],
@@ -297,7 +298,7 @@ function appRoot () {
             this._pollTimer = setInterval(async () => {
                 const data = Alpine.store('data');
                 const ui = Alpine.store('ui');
-                if (!data.loaded || ui.locked) return;
+                if (!data.loaded || ui.locked || ui.closingMonth) return;
                 const networked = window.IS_WEB || window.IS_REMOTE;
                 let r;
                 try {
@@ -319,6 +320,7 @@ function appRoot () {
                     const cur = ui.currentKey && data.db.months[ui.currentKey];
                     if (cur && JSON.stringify(cur) !== ui.savedSnapshot) return; // dirty - don't clobber
                     const res = unwrap(await window.api.loadDb());
+                    if (ui.closingMonth) return; // close-out started mid-reload - its result wins
                     data.db = res.data;
                     if (!res.data.months[ui.currentKey]) {
                         const keys = FinEngine.monthKeys(res.data);
@@ -334,9 +336,12 @@ function appRoot () {
             Alpine.store('ui').view = view;
         },
 
-        /** Ctrl/Cmd+K anywhere in the app toggles the search modal. */
+        /** Ctrl/Cmd+K anywhere in the app toggles the search modal. In the
+            desktop app Ctrl/Cmd+F works too; in a browser F stays the page find. */
         searchHotkey (e) {
-            if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'k') return;
+            if (!(e.ctrlKey || e.metaKey)) return;
+            const k = e.key.toLowerCase();
+            if (k !== 'k' && !(k === 'f' && !window.IS_WEB)) return;
             e.preventDefault();
             const ui = Alpine.store('ui');
             if (ui.locked || ui.onboarding || !Alpine.store('data').loaded) return;
@@ -380,13 +385,19 @@ function searchView () {
             this.searched = !!q;
             if (!db || !q) return;
             const cur = Alpine.store('ui').currentKey;
+            // amount queries: "394" finds 394.xx (whole-dollar match, so 3940
+            // stays out of the way); "394.9" and "$394.90" narrow by cents
+            const qAmt = /^\$?\d[\d,]*(\.\d*)?$/.test(q) ? q.replace(/[$,]/g, '') : null;
             const keys = FinEngine.monthKeys(db).slice().reverse(); // newest first
             for (const key of keys) {
                 for (const g of db.months[key].groups) {
                     for (const f of g.fields) {
                         const label = (f.label || '').toLowerCase();
                         const tags = (f.tags || []).join(' ').toLowerCase();
-                        if (!label.includes(q) && !tags.includes(q)) continue;
+                        const amtHit = qAmt !== null && (qAmt.includes('.')
+                            ? FinEngine.num(f.value).toFixed(2).startsWith(qAmt)
+                            : Math.trunc(FinEngine.num(f.value)) === +qAmt);
+                        if (!label.includes(q) && !tags.includes(q) && !amtHit) continue;
                         (key === cur ? this.current : this.others).push({
                             key,
                             fieldId: f.id,

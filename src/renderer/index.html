@@ -215,7 +215,7 @@
                 </div>
                 </template>
                 <nav class="flex gap-1 items-center">
-                <button type="button" @click="$store.ui.searchOpen = true" title="Search (Ctrl+K)"
+                <button type="button" @click="$store.ui.searchOpen = true" :title="window.IS_WEB ? 'Search (Ctrl+K)' : 'Search (Ctrl+F)'"
                     class="p-1.5 sm:mr-2 rounded-md transition-colors cursor-pointer text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700">
                     <!-- magnifying-glass, Font Awesome Free (same licence note as the sprite above) -->
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="currentColor" class="w-4 h-4" aria-hidden="true">
@@ -508,7 +508,7 @@
                                                                 <!-- scroll closes it: the fixed panel can't track its row, and a
                                                                      detached dropdown is worse than a dismissed one. The option
                                                                      list's own scrolling never reaches the window (no bubbling). -->
-                                                                <div class="relative max-sm:flex-1 max-sm:min-w-0 sm:w-[198px] shrink-0" x-data="budgetPicker(field)"
+                                                                <div class="relative max-sm:flex-1 max-sm:min-w-0 sm:w-[198px] shrink-0" x-data="budgetPicker()"
                                                                     @keydown.escape.stop="open = false" @click.outside="open = false" @scroll.window="open = false">
                                                                     <button type="button" @click="toggle()" :disabled="frozen"
                                                                         :title="group.kind === 'expense'
@@ -774,7 +774,7 @@
                                             class="w-full bg-white dark:bg-zinc-100 border border-zinc-300 hover:border-zinc-500 hover:text-zinc-700 text-zinc-600 font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors disabled:text-zinc-300 disabled:border-zinc-200">Cancel editing</button>
                                     </div>
                                 </template>
-                                <div class="mt-4 uppercase font-bold text-[11px] tracking-widest text-zinc-400 justify-between opacity-60 hidden md:flex whitespace-nowrap"><span>Save <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+S</kbd></span><span>Undo/Redo <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+(⇧)Z</kbd></span><span>Search <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+K</kbd></span></div>
+                                <div class="mt-4 uppercase font-bold text-[11px] tracking-widest text-zinc-400 justify-between opacity-60 hidden md:flex whitespace-nowrap"><span>Save <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+S</kbd></span><span>Undo/Redo <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+(⇧)Z</kbd></span><span>Search <kbd class="border border-zinc-300 rounded-sm py-px px-1" x-text="window.IS_WEB ? 'Ctrl+K' : 'Ctrl+F'"></kbd></span></div>
                             </div>
                         </aside>
                     </div>
@@ -1362,7 +1362,7 @@
                 <div class="absolute inset-0 bg-zinc-900/50 dark:bg-black/60 backdrop-blur-[2px] cursor-pointer"
                     @click="$store.ui.searchOpen = false"></div>
                 <div class="relative bg-white dark:bg-zinc-100 rounded-xl shadow-2xl w-full max-w-xl mx-4 overflow-hidden" x-data="searchView()">
-                    <input type="text" x-model="q" @input="onInput()" placeholder="Search fields and tags…"
+                    <input type="text" x-model="q" @input="onInput()" placeholder="Search fields, tags, or amounts…"
                         x-init="$nextTick(() => $el.focus())"
                         @keydown.arrow-down.prevent="move(1)" @keydown.arrow-up.prevent="move(-1)"
                         @keydown.enter.prevent="go(all[active])"

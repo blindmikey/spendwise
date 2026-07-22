@@ -89,7 +89,12 @@ function monthView () {
          * outside click to close. Same acceptance rule as the old <select>:
          * only ids present in the options land in budgetId; '-' clears to null.
          */
-        budgetPicker (field) {
+        budgetPicker () {
+            // the row's field is always read as this.field - the live x-for
+            // scope. A reference captured here would go stale when a db swap
+            // (poll refresh, undo, save-merge) replaces the month's objects
+            // under the keyed rows: the row renders the new object while the
+            // picker reads - and worse, writes - the dead one.
             return {
                 open: false,
                 q: '',
@@ -100,7 +105,7 @@ function monthView () {
                 // below is too tight
                 pos: { x: 0, y: 0, w: 0, up: false },
                 get selLabel () {
-                    const cur = this.budgetOptions.find((o) => o.id === (field.budgetId || ''));
+                    const cur = this.budgetOptions.find((o) => o.id === (this.field.budgetId || ''));
                     return (cur || this.budgetOptions[0] || { label: '-' }).label;
                 },
                 get filtered () {
@@ -119,7 +124,7 @@ function monthView () {
                         const up = below < 250 && r.top > below;
                         this.pos = { x: r.left, y: up ? r.top - 4 : r.bottom + 4, w: r.width, up };
                         this.q = '';
-                        this.active = Math.max(0, this.budgetOptions.findIndex((o) => o.id === (field.budgetId || '')));
+                        this.active = Math.max(0, this.budgetOptions.findIndex((o) => o.id === (this.field.budgetId || '')));
                         this.$nextTick(() => this.$refs.search && this.$refs.search.focus());
                     }
                 },
@@ -129,7 +134,7 @@ function monthView () {
                 },
                 pick (opt) {
                     if (!opt) return;
-                    field.budgetId = opt.id && this.budgetOptions.some((o) => o.id === opt.id) ? opt.id : null;
+                    this.field.budgetId = opt.id && this.budgetOptions.some((o) => o.id === opt.id) ? opt.id : null;
                     this.open = false;
                 },
             };
@@ -834,6 +839,11 @@ function monthView () {
                 confirmText: 'Close Out Month',
             });
             if (!okClose) return;
+            // the rev poll's silent reload must not interleave with the close:
+            // the server bumps its rev the moment it persists, so a poll tick
+            // landing while the (slow, full-snapshot) response is in flight
+            // would swap the db mid-transition
+            this.ui.closingMonth = true;
             try {
                 const res = unwrap(await window.api.closeMonth({
                     key: this.key,
@@ -852,6 +862,23 @@ function monthView () {
                     : `${FinEngine.keyLabel(res.nextKey)} is ready`, 'success');
             } catch (e) {
                 showToast(e.message, 'error', 7000);
+            } finally {
+                this.ui.closingMonth = false;
+            }
+            // self-heal: the close persisted server-side, so if the new month
+            // somehow failed to appear (bad key, refresh race), recover the way
+            // a restart would - reload and land on the latest month
+            if (!this.month) {
+                try {
+                    const r = unwrap(await window.api.loadDb());
+                    Alpine.store('data').db = r.data;
+                    const keys = FinEngine.monthKeys(r.data);
+                    this.ui.currentKey = keys[keys.length - 1];
+                    this.snapshot();
+                    this.refreshRateCache();
+                    this.resetHistory();
+                    this.renderChart();
+                } catch { /* offline mid-close: the error toast above already showed */ }
             }
         },
     };
