@@ -12,9 +12,48 @@ function fmt (value) {
     return _fmt.format(E.num(value));
 }
 
+// The app rounds to whole dollars everywhere, but places that answer "what was
+// the recorded figure?" (search results) must not: $394.90 searched by its
+// cents can't come back as $395. Whole amounts still read as whole.
+let _fmtExact = null;
+function fmtExact (value) {
+    const n = E.num(value);
+    if (Number.isInteger(n)) return fmt(n);
+    if (!_fmtExact) {
+        const currency = (Alpine.store('data').db?.settings?.currency) || 'USD';
+        _fmtExact = new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 2 });
+    }
+    return _fmtExact.format(n);
+}
+
 function fmtSigned (value) {
     const n = E.num(value);
     return (n > 0 ? '+' : '') + fmt(n);
+}
+
+/**
+ * Number inputs under x-model.number: a paste changes the model in one jump,
+ * so Alpine writes the parsed float back and "11.20" snaps to "11.2" (typing
+ * survives only because the last keystroke doesn't change the number). After
+ * Alpine's flush, put the user's exact text back when it's the same amount.
+ */
+function keepPastedText (e) {
+    const el = e.target;
+    const text = ((e.clipboardData && e.clipboardData.getData('text')) || '').trim();
+    if (!text) return;
+    // Alpine's write-back can land across more than one flush wave, so check a
+    // few times until it settles; any further typing by the user wins instantly
+    let skips = 1; // the paste's own input event
+    let done = false;
+    const onInput = () => { if (skips-- > 0) return; done = true; el.removeEventListener('input', onInput); };
+    el.addEventListener('input', onInput);
+    const restore = () => {
+        if (done || el.value === text) return;
+        if (Number(el.value) === Number(text)) el.value = text;
+    };
+    requestAnimationFrame(restore);
+    setTimeout(restore, 120);
+    setTimeout(() => { restore(); el.removeEventListener('input', onInput); }, 300);
 }
 
 function showToast (message, type = 'info', timeout = 3500) {

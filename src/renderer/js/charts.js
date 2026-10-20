@@ -117,8 +117,35 @@ const Charts = {
         return options;
     },
 
+    /**
+     * ApexCharts inserts series names and donut labels into the DOM as HTML
+     * (legend, tooltips) WITHOUT escaping - and user text reaches both (tag
+     * names). Raw HTML there is code execution: Alpine initializes x-
+     * attributes on any node that appears, under the CSP's unsafe-eval.
+     * Entity-escape those sinks; they only ever render as HTML, so the text
+     * displays exactly as written. xaxis categories stay untouched - they
+     * render as SVG text (escaping would show literal entities) and must
+     * therefore never carry user text, only app-generated month labels.
+     */
+    _escapeHtml (s) {
+        return String(s).replace(/[&<>"']/g, (c) => (
+            { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    },
+
+    _sanitize (options) {
+        if (Array.isArray(options.labels)) {
+            options.labels = options.labels.map((l) => this._escapeHtml(l));
+        }
+        if (Array.isArray(options.series)) {
+            options.series = options.series.map((s) => (
+                s && typeof s === 'object' && 'name' in s ? { ...s, name: this._escapeHtml(s.name) } : s));
+        }
+        return options;
+    },
+
     _render (id, el, options) {
         if (!el) return null;
+        this._sanitize(options);
         this._applyTheme(options);
         // destroy + clear + create: updateOptions() does not reliably apply
         // changed label sets (donut legends stick), so a fresh instance it is

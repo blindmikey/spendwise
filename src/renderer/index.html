@@ -429,7 +429,7 @@
                                                                 <!-- spinner steps whole dollars everywhere; cents can
                                                                      still be TYPED on income/expense rows. Group totals
                                                                      round the cents away (income down, spending up). -->
-                                                                <input type="number" x-model.number="field.value" :disabled="frozen" step="1"
+                                                                <input type="number" x-model.number="field.value" :disabled="frozen" step="1" @paste="keepPastedText($event)"
                                                                     :title="group.kind === 'expense' && field.budgetId && !FinEngine.num(field.value)
                                                                         ? 'Linked to an envelope but $0 - it draws nothing until an amount is entered'
                                                                         : (group.kind === 'envelope' || group.kind === 'goal' ? 'Monthly allotment' : 'Amount')"
@@ -481,7 +481,7 @@
                                                                 <span class="sm:hidden shrink-0 text-[10px] uppercase tracking-widest text-zinc-350 select-none">target</span>
                                                                 <div class="relative" title="Goal target">
                                                                     <span class="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 text-xs select-none">$</span>
-                                                                    <input type="number" x-model.number="field.target" placeholder="target" :disabled="frozen"
+                                                                    <input type="number" x-model.number="field.target" placeholder="target" :disabled="frozen" @paste="keepPastedText($event)"
                                                                         class="w-24 max-sm:w-20 border border-zinc-200 rounded pl-5 pr-1 py-1.5 text-sm text-right bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 dark:text-[#c7e0da] focus:outline-none focus:ring-1 focus:ring-emerald-500">
                                                                 </div>
                                                             </div>
@@ -704,8 +704,13 @@
                                             </template>
 
                                             <div class="text-center py-1">
-                                                <button type="button" @click="addField(group)" x-html="'<svg class=\'w-4 h-4 mr-2\'><use href=\'#i-plus\'/></svg> Add a New '+ group.title +' field'" :disabled="frozen"
-                                                    class="text-sm w-full text-zinc-400 dark:text-[#c7e0da]/50 hover:text-emerald-600 dark:hover:text-emerald-400 cursor-pointer border border-dashed border-zinc-300 hover:border-emerald-400 rounded-md px-4 py-2 transition-colors inline-flex items-center"></button>
+                                                <!-- x-text, never x-html: group.title is user text, and injected
+                                                     x- attributes would be evaluated by Alpine (see charts.js note) -->
+                                                <button type="button" @click="addField(group)" :disabled="frozen"
+                                                    class="text-sm w-full text-zinc-400 dark:text-[#c7e0da]/50 hover:text-emerald-600 dark:hover:text-emerald-400 cursor-pointer border border-dashed border-zinc-300 hover:border-emerald-400 rounded-md px-4 py-2 transition-colors inline-flex items-center">
+                                                    <svg class="w-4 h-4 mr-2"><use href="#i-plus"/></svg>
+                                                    <span x-text="'Add a New ' + group.title + ' field'"></span>
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -1380,7 +1385,7 @@
                                     <span class="block text-sm text-zinc-700 truncate" x-text="hit.label"></span>
                                     <span class="block text-[11px] text-zinc-400 truncate" x-text="hit.group + (hit.tags.length ? ' · #' + hit.tags.join(' #') : '')"></span>
                                 </span>
-                                <span class="text-sm font-semibold tabular-nums text-zinc-600 shrink-0" x-text="fmt(hit.value)"></span>
+                                <span class="text-sm font-semibold tabular-nums text-zinc-600 shrink-0" x-text="fmtExact(hit.value)"></span>
                             </button>
                         </template>
 
@@ -1397,7 +1402,7 @@
                                     <span class="block text-sm text-zinc-700 truncate" x-text="hit.label"></span>
                                     <span class="block text-[11px] text-zinc-400 truncate" x-text="hit.monthLabel + ' · ' + hit.group + (hit.tags.length ? ' · #' + hit.tags.join(' #') : '')"></span>
                                 </span>
-                                <span class="text-sm font-semibold tabular-nums text-zinc-600 shrink-0" x-text="fmt(hit.value)"></span>
+                                <span class="text-sm font-semibold tabular-nums text-zinc-600 shrink-0" x-text="fmtExact(hit.value)"></span>
                             </button>
                         </template>
                     </div>
