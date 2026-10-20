@@ -29,6 +29,7 @@ document.addEventListener('alpine:init', () => {
         savedSnapshot: '',
         monthGoto: null, // set by monthView: header picker → goto(key)
         revealField: null, // set by monthView: search hit → collapse-others + scroll + blink
+        inboxReveal: null, // item id: a row's imported badge → inbox modal scrolls to + blinks it
         recomputeChanges: [],
         importSummary: null,
         importMap: { folder: '', groups: [] },

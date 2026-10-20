@@ -400,12 +400,14 @@
                                                                     ? 'border-red-400 focus:ring-red-400'
                                                                     : 'border-zinc-200 focus:ring-emerald-500', field.importId && 'pr-7']">
                                                             <!-- bank-import marker: this row was published/merged from
-                                                                 the import inbox (field.importId backlinks the item) -->
+                                                                 the import inbox (field.importId backlinks the item).
+                                                                 Clicking it opens the inbox on the item, scrolled + blinked. -->
                                                             <template x-if="field.importId">
-                                                                <span class="absolute right-2 top-1/2 -translate-y-1/2 text-sky-500 dark:text-sky-400 flex items-center select-none"
+                                                                <button type="button" @click="revealImport(field)"
+                                                                    class="absolute right-1 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 dark:hover:text-emerald-300 cursor-pointer select-none"
                                                                     :title="importedTitle(field)">
                                                                     <svg class="w-3 h-3"><use href="#i-import"/></svg>
-                                                                </span>
+                                                                </button>
                                                             </template>
                                                             <!-- goal budgets: subtle funding underline (partial-width
                                                                  "border" - a real border can't stop partway).
@@ -1467,7 +1469,7 @@
                                 This month is closed - unlock it to publish drafts. Dismissing still works.</p>
                             <template x-for="item in pendingItems" :key="item.id">
                                 <template x-if="edits[item.id]">
-                                    <div class="border-t border-zinc-100 py-3">
+                                    <div class="border-t border-zinc-100 py-3" :data-import-item="item.id">
                                         <div class="flex items-center gap-1.5">
                                             <span class="w-10 shrink-0 text-[11px] text-zinc-400 tabular-nums select-none" x-text="dateLabel(item)"></span>
                                             <input type="text" x-model="edits[item.id].label" :disabled="frozen" placeholder="Label"
@@ -1531,7 +1533,7 @@
                         <!-- ------------------------ processed -->
                         <div x-show="tab === 'processed'" class="max-h-[55vh] overflow-y-auto pr-1">
                             <template x-for="item in processedItems" :key="item.id">
-                                <div class="border-t border-zinc-100 py-2 flex items-center gap-2">
+                                <div class="border-t border-zinc-100 py-2 flex items-center gap-2" :data-import-item="item.id">
                                     <span class="shrink-0 text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded-full select-none"
                                         :class="statusChip(item).cls" x-text="statusChip(item).text"></span>
                                     <span class="w-10 shrink-0 text-[11px] text-zinc-400 tabular-nums select-none" x-text="dateLabel(item)"></span>

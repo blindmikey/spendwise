@@ -55,13 +55,22 @@ function inboxView () {
         // ------------------------------------------------------- lifecycle
 
         init () {
+            // consumeReveal is DEFERRED in both watchers: a badge click sets
+            // inboxReveal and opens the modal in one flush, so both fire
+            // together - synchronous consumption would let this watcher's
+            // tab reset land AFTER the reveal picked its tab. After the
+            // flush, whichever queued callback runs first consumes; the
+            // other finds the reveal cleared and no-ops.
             this.$watch('open', (v) => {
                 if (!v) return;
                 this.importing = false;
                 this.csv = null;
                 this.tab = 'review';
                 this.prepareEdits();
+                this.$nextTick(() => this.consumeReveal());
             });
+            // a badge click while the modal is ALREADY open still reveals
+            this.$watch('ui.inboxReveal', (v) => { if (v && this.open) this.$nextTick(() => this.consumeReveal()); });
             // prefills are month-specific (merge targets live in the month)
             this.$watch('key', () => {
                 this.edits = {};
@@ -106,6 +115,33 @@ function inboxView () {
                     always: false,
                 };
             }
+        },
+
+        /**
+         * A month row's imported badge was clicked (ui.inboxReveal = item id):
+         * land on the right tab, scroll the item into view, and blink it -
+         * same spotlight the month view uses for search hits.
+         */
+        consumeReveal () {
+            const id = this.ui.inboxReveal;
+            if (!id) return;
+            this.ui.inboxReveal = null;
+            const item = this.items.find((i) => i.id === id);
+            if (!item) return;
+            this.importing = false;
+            this.tab = this.status(item) === 'pending' ? 'review' : 'processed';
+            this.$nextTick(() => {
+                // one frame for the modal's own 150ms fade to get on screen
+                setTimeout(() => {
+                    const el = document.querySelector(`[data-import-item="${id}"]`);
+                    if (!el) return;
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    el.classList.remove('row-blink');
+                    void el.offsetWidth; // restart the animation on repeat clicks
+                    el.classList.add('row-blink');
+                    setTimeout(() => el.classList.remove('row-blink'), 2400);
+                }, 180);
+            });
         },
 
         // --------------------------------------------------------- helpers

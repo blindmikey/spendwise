@@ -319,7 +319,13 @@ function monthView () {
             const item = items.find((i) => i.id === field.importId);
             if (!item) return 'Imported from bank';
             return `Imported from bank: ${item.label}`
-                + (item.date ? ` · ${item.date}` : '') + ` · ${fmtExact(item.amount)}`;
+                + (item.date ? ` · ${item.date}` : '') + ` · ${fmtExact(item.amount)}`
+                + ' — click to see it in the import inbox';
+        },
+        /** The badge is a link back to the ledger: open the inbox on the item. */
+        revealImport (field) {
+            this.ui.inboxReveal = field.importId;
+            this.ui.modals.inbox = true;
         },
         contrib (group, field) { return FinEngine.contribution(this.month, field, group.kind); },
         isAuto (field) { return FinEngine.hasAuto(field); },
