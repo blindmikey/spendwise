@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('api', {
     closeMonth: invoke('db:closeMonth'),
     saveSettings: invoke('db:saveSettings'),
     applyTagsEverywhere: invoke('db:apply-tags'),
+    importsApply: invoke('db:imports-apply'),
     listBackups: invoke('backups:list'),
     restoreBackup: invoke('backups:restore'),
     openBackupsFolder: invoke('backups:open-folder'),

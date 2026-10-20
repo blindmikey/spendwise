@@ -97,6 +97,7 @@ export async function registerIpc () {
     handle('db:closeMonth', async (p) => ok(await active().closeMonth(p)));
     handle('db:saveSettings', async (p) => ok(await active().saveSettings(p)));
     handle('db:apply-tags', async (p) => ok(await active().applyTagsEverywhere(p)));
+    handle('db:imports-apply', async (p) => ok(await active().importsApply(p)));
     handle('backups:list', async () => ok(await active().listBackups()));
     handle('backups:restore', async (p) => ok(await active().restoreBackup(p)));
     handle('update:check', async (p) => ok(await active().checkUpdate(p)));

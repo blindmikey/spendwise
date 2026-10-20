@@ -49,6 +49,14 @@ copy forward, savings gets a snapshot, and next month is waiting for you.
 into spending and income trends, per-tag averages, and your savings trajectory
 over the years.
 
+**Import bank transactions from CSV.** Every line arrives as a draft - nothing
+touches your books until you add it as a new expense, merge it into an existing
+row (the penciled-in "Electric" fills with the bank's actual figure), or dismiss
+it (the credit-card payment whose purchases are already counted). The inbox
+remembers what it's seen, so re-importing an overlapping file never duplicates,
+and it learns from you: each choice becomes a per-merchant rule, so next month's
+bill arrives pre-filled - or pre-dismissed.
+
 **Find anything in one keystroke.** `Ctrl+K` searches every month at once -
 this month's matches first, then the full history - so "what do we usually pay
 for insurance?" answers itself, and picking a result jumps straight to that row.

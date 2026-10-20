@@ -371,6 +371,10 @@
                     if (!f.pinned && !isEnvelopeKind(def.kind)) continue;
                     const nf = clone(f);
                     nf.accounted = false;
+                    // imported-ness belongs to the month the bank line landed
+                    // in - a pinned row that carries forward is a fresh,
+                    // not-yet-imported instance next month
+                    delete nf.importId;
                     if (isEnvelopeKind(def.kind)) {
                         const eff = effectiveSpent(month, f);
                         // goals are never strict: their overspend split already
@@ -816,6 +820,9 @@
             settings,
             months,
             savingsHistory: currentKey ? { [currentKey]: num(settings.initialSavings) } : {},
+            // bank-import inbox: accounts, standing rules, and the item ledger
+            // (see shared/importer.js). Older dbs lack it - ensured lazily.
+            imports: { accounts: [], rules: [], items: [] },
         };
     }
 

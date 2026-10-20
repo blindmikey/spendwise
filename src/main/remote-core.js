@@ -16,8 +16,8 @@ export class RemoteAuthError extends Error {}
 /** The server's WEB_METHODS surface - keep in lockstep with webserver.js. */
 const METHODS = [
     'loadDb', 'rev', 'saveMonth', 'saveClosedMonth', 'closeMonth',
-    'saveSettings', 'applyTagsEverywhere', 'listBackups', 'restoreBackup',
-    'checkUpdate', 'logout',
+    'saveSettings', 'applyTagsEverywhere', 'importsApply', 'listBackups',
+    'restoreBackup', 'checkUpdate', 'logout',
 ];
 
 export function normalizeHost (host) {

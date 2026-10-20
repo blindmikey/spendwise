@@ -36,6 +36,7 @@ document.addEventListener('alpine:init', () => {
             recompute: false,
             importMap: false,
             importSummary: false,
+            inbox: false, // bank-import review (views/inbox.js)
             backups: false,
             confirm: false,
         },

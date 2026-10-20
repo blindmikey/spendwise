@@ -133,6 +133,34 @@ describe('api-core applyTagsEverywhere', () => {
     });
 });
 
+describe('api-core importsApply', () => {
+    it('ensures the blob on older dbs, applies ops, persists, bumps the rev', async () => {
+        expect(ctx.db.data.imports).toBeUndefined(); // the seed predates imports
+        ctx.db.data.meta.rev = 7; // no rev gate, like tags
+        const res = await core.importsApply({
+            ops: [
+                { op: 'saveAccount', account: { id: 'acct-1', label: 'Checking', groupId: 'g-exp' } },
+                { op: 'addItems', accountId: 'acct-1', items: [
+                    { fp: 'a', date: '2026-06-02', label: 'COFFEE', amount: 4.5 },
+                    { fp: 'a', date: '2026-06-02', label: 'COFFEE', amount: 4.5 },
+                ] },
+            ],
+        });
+        expect(res.rev).toBe(8);
+        expect(res.added).toBe(1);
+        expect(res.skipped).toBe(1);
+        expect(res.imports.items).toHaveLength(1);
+        const onDisk = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+        expect(onDisk.imports.items).toHaveLength(1);
+        expect(onDisk.meta.rev).toBe(8);
+    });
+
+    it('loadDb ensures the imports blob exists for the renderer', async () => {
+        const res = await core.loadDb();
+        expect(res.data.imports).toEqual({ accounts: [], rules: [], items: [] });
+    });
+});
+
 describe('api-core app password', () => {
     it('set → verify → change requires current → remove', async () => {
         expect(core.authHas().hasPassword).toBe(false);

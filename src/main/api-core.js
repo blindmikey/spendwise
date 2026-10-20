@@ -14,6 +14,7 @@
 
 import fs from 'node:fs';
 import '../shared/engine.js';
+import '../shared/importer.js';
 import { backupDb, listBackups, backupPath } from './backup.js';
 import { importLegacy } from './migrate.js';
 import { openDb } from './db-open.js';
@@ -21,6 +22,7 @@ import { hashPassword, verifyPassword } from './auth.js';
 import { createUpdateChecker, RELEASES_URL } from './update-check.js';
 
 const E = globalThis.FinEngine;
+const I = globalThis.FinImporter;
 
 export function createCore (ctx) {
     const updater = createUpdateChecker({
@@ -44,6 +46,7 @@ export function createCore (ctx) {
         async loadDb () {
             await ctx.db.read();
             if (!ctx.db.data) throw new Error('Database file is missing or unreadable.');
+            I.ensureImports(ctx.db.data); // older dbs predate the import inbox
             return snapshot();
         },
 
@@ -174,6 +177,19 @@ export function createCore (ctx) {
 
             await persist();
             return { ...snapshot(), changes };
+        },
+
+        // Bank-import ledger ops (add items, status patches, accounts, rules).
+        // No rev gate, same reasoning as tags: the ops are semantic and
+        // commute with concurrent edits - adds dedupe against the ledger,
+        // patches target item ids - so rebasing onto the current state is
+        // always correct. Month rows created by publish/merge are NOT written
+        // here; they ride the ordinary month save (and its merge).
+        async importsApply ({ ops }) {
+            I.ensureImports(ctx.db.data);
+            const res = I.applyOps(ctx.db.data, ops || []);
+            await persist();
+            return { rev: ctx.db.data.meta.rev, imports: E.clone(ctx.db.data.imports), ...res };
         },
 
         // Tag add/remove applies to the field across ALL months. No rev gate:

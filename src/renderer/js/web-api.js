@@ -33,6 +33,7 @@ if (!window.api) {
         closeMonth: call('closeMonth'),
         saveSettings: call('saveSettings'),
         applyTagsEverywhere: call('applyTagsEverywhere'),
+        importsApply: call('importsApply'),
         listBackups: call('listBackups'),
         restoreBackup: call('restoreBackup'),
         openBackupsFolder: call('openBackupsFolder'),

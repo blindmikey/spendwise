@@ -28,8 +28,8 @@ const MAX_BODY = 64 * 1024 * 1024;
 // management stay desktop-only.
 const WEB_METHODS = new Set([
     'loadDb', 'rev', 'saveMonth', 'saveClosedMonth', 'closeMonth',
-    'saveSettings', 'applyTagsEverywhere', 'listBackups', 'restoreBackup',
-    'checkUpdate',
+    'saveSettings', 'applyTagsEverywhere', 'importsApply', 'listBackups',
+    'restoreBackup', 'checkUpdate',
 ]);
 
 const MIME = {

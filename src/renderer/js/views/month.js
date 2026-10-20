@@ -1,4 +1,4 @@
-/* global Alpine, FinEngine, Charts, fmt, showToast, confirmDialog, unwrap */
+/* global Alpine, FinEngine, FinImporter, Charts, fmt, fmtExact, showToast, confirmDialog, unwrap */
 'use strict';
 
 function monthView () {
@@ -312,6 +312,15 @@ function monthView () {
         // toString…) - inside Alpine's `with`-based expression scope they
         // resolve to the prototype method of the nearest scope object.
         rateOf (field) { return FinEngine.fieldValue(this.month, field); },
+        // bank-import inbox (views/inbox.js): drafts awaiting review anywhere
+        get pendingImports () { return FinImporter.pendingCount(this.db); },
+        importedTitle (field) {
+            const items = (this.db && this.db.imports && this.db.imports.items) || [];
+            const item = items.find((i) => i.id === field.importId);
+            if (!item) return 'Imported from bank';
+            return `Imported from bank: ${item.label}`
+                + (item.date ? ` · ${item.date}` : '') + ` · ${fmtExact(item.amount)}`;
+        },
         contrib (group, field) { return FinEngine.contribution(this.month, field, group.kind); },
         isAuto (field) { return FinEngine.hasAuto(field); },
         isSched (group, field) { return group.kind === 'goal' && !!field.dueKey && FinEngine.num(field.target) > 0; },
