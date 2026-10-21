@@ -1,4 +1,4 @@
-/* global Alpine, FinEngine, fmt, showToast, confirmDialog, unwrap */
+/* global Alpine, FinEngine, fmt, showToast, confirmDialog, simplefinControls, unwrap */
 'use strict';
 
 function settingsView (primary = false) {
@@ -13,6 +13,8 @@ function settingsView (primary = false) {
         _base: null, // JSON of the settings the draft was cloned from
         backups: [],
         initialUnlocked: false, // opt-in to edit initial savings once history exists
+        // SimpleFIN connection management (shared controls - see helpers.js)
+        ...simplefinControls(),
 
         get db () { return Alpine.store('data').db; },
         get ui () { return Alpine.store('ui'); },
@@ -40,6 +42,7 @@ function settingsView (primary = false) {
             if (!this.primary) return;
             this.loadWebStatus();
             this.loadRemoteStatus();
+            this.loadSfStatus();
             this.watchRemoteIntent();
             // sync once (the watch below only fires on change) then mirror to the
             // store so the unsaved-changes gate (app.js) can see draft edits here

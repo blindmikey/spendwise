@@ -89,6 +89,89 @@ function confirmDialog (opts) {
     });
 }
 
+/**
+ * SimpleFIN connection controls, shared by the Settings panel (which owns
+ * connect/disconnect) and the import inbox (sync button + status): spread
+ * `...simplefinControls()` into the component. Expects the host component to
+ * expose `db` and `ui` getters; an optional afterSfSync(res) hook runs after
+ * a sync lands. The setup token goes straight to the backend and is never
+ * stored or echoed in the renderer - all it ever learns is "connected".
+ */
+function simplefinControls () {
+    return {
+        sf: { loaded: false, connected: false, lastSync: null, busy: false, token: '' },
+
+        async loadSfStatus () {
+            if (!window.api.simplefinStatus) return;
+            try {
+                const res = unwrap(await window.api.simplefinStatus());
+                this.sf.connected = res.connected;
+                this.sf.lastSync = res.lastSync;
+                this.sf.loaded = true;
+            } catch { /* the panel just shows the connect form */ }
+        },
+
+        sfLastSyncLabel () {
+            if (!this.sf.lastSync) return 'never synced';
+            try { return 'last sync ' + new Date(this.sf.lastSync).toLocaleString(); } catch { return ''; }
+        },
+
+        async connectSf () {
+            const token = this.sf.token.trim();
+            if (!token || this.sf.busy || this.ui.offline) return;
+            this.sf.busy = true;
+            try {
+                unwrap(await window.api.simplefinSetup({ token }));
+                this.sf.token = '';
+                this.sf.connected = true;
+                showToast('Connected to SimpleFIN', 'success');
+                await this.syncSf();
+            } catch (e) {
+                showToast(e.message, 'error', 9000);
+            } finally {
+                this.sf.busy = false;
+            }
+        },
+
+        async syncSf () {
+            if (!this.sf.connected || this.ui.offline) return;
+            this.sf.busy = true;
+            try {
+                const res = unwrap(await window.api.simplefinSync({}));
+                this.db.imports = res.imports;
+                this.db.meta.rev = res.rev;
+                this.sf.lastSync = new Date().toISOString();
+                if (this.afterSfSync) this.afterSfSync(res);
+                showToast(`Synced ${res.accounts} account${res.accounts === 1 ? '' : 's'}: `
+                    + `${res.added} new` + (res.skipped ? ` · ${res.skipped} already seen` : ''), 'success', 5000);
+                for (const w of res.warnings || []) showToast(String(w), 'error', 8000);
+            } catch (e) {
+                showToast(e.message, 'error', 9000);
+            } finally {
+                this.sf.busy = false;
+            }
+        },
+
+        async disconnectSf () {
+            const okOff = await confirmDialog({
+                title: 'Disconnect SimpleFIN?',
+                body: 'The stored access credential is deleted. Imported items, accounts, and rules all stay - '
+                    + 'reconnect anytime with a fresh setup token.',
+                confirmText: 'Disconnect',
+            });
+            if (!okOff) return;
+            try {
+                unwrap(await window.api.simplefinDisconnect());
+                this.sf.connected = false;
+                this.sf.lastSync = null;
+                showToast('SimpleFIN disconnected', 'info');
+            } catch (e) {
+                showToast(e.message, 'error', 7000);
+            }
+        },
+    };
+}
+
 /** Unwrap an IPC response; throws on { ok: false } and shows nothing itself. */
 function unwrap (res) {
     if (!res || res.ok !== true) throw new Error(res && res.error || 'Unknown error');
