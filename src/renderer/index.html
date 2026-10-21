@@ -1313,8 +1313,8 @@
                                 </div>
 
                                 <div class="text-[11px] text-zinc-400 mt-4 pt-4.5 border-t border-zinc-100 dark:border-[#c7e0da]/10 select-none"
-                                    title="Application version - if this is older than your latest install, the window is running stale code">
-                                    <span class="font-brand text-sm inline-block -mb-1">Spend Wise</span> v<span class="font-semibold" x-text="$store.data.version || 'dev'"></span> · by Michael Niles
+                                    title="This window's version - if it's older than your latest install, the window is running stale code. With a remote database, the connected server's own version follows in parentheses">
+                                    <span class="font-brand text-sm inline-block -mb-1">Spend Wise</span> v<span class="font-semibold" x-text="window.APP_VERSION || $store.data.version || 'dev'"></span><span x-show="window.IS_REMOTE"> (server v<span class="font-semibold" x-text="$store.data.version || '?'"></span>)</span> · by Michael Niles
                                 </div>
                             </section>
 

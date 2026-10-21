@@ -85,8 +85,11 @@ export async function registerIpc () {
         }
     });
 
-    // preload reads this synchronously at page load → window.IS_REMOTE
+    // preload reads these synchronously at page load → window.IS_REMOTE,
+    // window.APP_VERSION (the desktop binary's own version - loadDb's version
+    // is the serving process's, which in remote mode is the hosted server)
     ipcMain.on('remote:mode-sync', (e) => { e.returnValue = mode === 'remote'; });
+    ipcMain.on('app:version-sync', (e) => { e.returnValue = ctx.version; });
 
     // core-backed handlers (same handlers serve the web clients); in remote
     // mode they proxy to the hosted server instead

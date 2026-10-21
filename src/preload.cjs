@@ -40,3 +40,7 @@ contextBridge.exposeInMainWorld('api', {
 // Remote mode changes what the renderer shows (offline handling on, local-file
 // features off) - read synchronously so the flag exists before any script runs.
 contextBridge.exposeInMainWorld('IS_REMOTE', ipcRenderer.sendSync('remote:mode-sync') === true);
+
+// The desktop binary's own version. Absent in web clients, where the window's
+// code and the serving process are the same thing and loadDb's version covers both.
+contextBridge.exposeInMainWorld('APP_VERSION', ipcRenderer.sendSync('app:version-sync') || '');
