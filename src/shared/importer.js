@@ -371,10 +371,35 @@
         return 'pending';
     }
 
-    function pendingCount (db) {
+    /**
+     * The month an item BELONGS to, by its transaction date (falling back to
+     * when it was imported), clamped to months that exist in the db - a
+     * transaction older than the books lands in the earliest month, a
+     * post-dated one in the latest, so no item is ever unreachable. This is
+     * the viewing scope; `item.monthKey` (where a publish landed) is set at
+     * publish time and under month scoping the two coincide.
+     */
+    function homeMonthKey (db, item) {
+        let k = String(item.date || '').slice(0, 7);
+        if (!/^\d{4}-\d{2}$/.test(k)) k = String(item.added || '').slice(0, 7);
+        const keys = E().monthKeys(db);
+        if (!keys.length || (db.months && db.months[k])) return k;
+        if (k < keys[0]) return keys[0];
+        if (k > keys[keys.length - 1]) return keys[keys.length - 1];
+        // a gap inside the history (months are normally contiguous): clamp down
+        for (let i = keys.length - 1; i >= 0; i--) { if (keys[i] < k) return keys[i]; }
+        return keys[0];
+    }
+
+    /** Drafts awaiting review - all of them, or only one month's (monthKey). */
+    function pendingCount (db, monthKey) {
         const items = (db && db.imports && db.imports.items) || [];
         let n = 0;
-        for (const i of items) { if (effectiveStatus(db, i) === 'pending') n += 1; }
+        for (const i of items) {
+            if (effectiveStatus(db, i) !== 'pending') continue;
+            if (monthKey && homeMonthKey(db, i) !== monthKey) continue;
+            n += 1;
+        }
         return n;
     }
 
@@ -471,7 +496,7 @@
         buildTransactions, detectExpensesNegative, applySign, withFingerprints,
         normalizeMerchant,
         ensureImports, findRule, applyOps,
-        itemField, effectiveStatus, pendingCount,
+        itemField, effectiveStatus, homeMonthKey, pendingCount,
         publish, mergeInto, revert, suggestTarget,
     };
 });

@@ -49,9 +49,30 @@ function inboxView () {
         get items () { return this.imports.items || []; },
 
         status (item) { return FinImporter.effectiveStatus(this.db, item); },
-        get pendingItems () { return this.items.filter((i) => this.status(i) === 'pending'); },
+        homeKey (item) { return FinImporter.homeMonthKey(this.db, item); },
+        // both tabs are scoped to the month being VIEWED, by transaction date -
+        // September's bank lines show up while looking at September
+        get pendingItems () {
+            return this.items.filter((i) => this.status(i) === 'pending' && this.homeKey(i) === this.key);
+        },
         get processedItems () {
-            return this.items.filter((i) => this.status(i) !== 'pending').slice().reverse().slice(0, 200);
+            return this.items.filter((i) => this.status(i) !== 'pending' && this.homeKey(i) === this.key)
+                .slice().reverse().slice(0, 200);
+        },
+        /** Drafts waiting in OTHER months: [{ key, label, count }], newest first. */
+        get otherPending () {
+            const by = {};
+            for (const i of this.items) {
+                if (this.status(i) !== 'pending') continue;
+                const k = this.homeKey(i);
+                if (k === this.key) continue;
+                by[k] = (by[k] || 0) + 1;
+            }
+            return Object.keys(by).sort().reverse()
+                .map((k) => ({ key: k, label: FinEngine.keyLabel(k), count: by[k] }));
+        },
+        async gotoMonth (key) {
+            if (this.ui.monthGoto) await this.ui.monthGoto(key); // the key watcher re-preps the edits
         },
         get expenseGroups () {
             if (!this.month) return [];

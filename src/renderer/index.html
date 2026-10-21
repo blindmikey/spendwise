@@ -1572,8 +1572,19 @@
                                 </template>
                             </template>
                             <div x-show="!pendingItems.length" class="text-center py-10">
-                                <p class="text-sm text-zinc-400 mb-1">Nothing to review.</p>
+                                <p class="text-sm text-zinc-400 mb-1" x-text="'Nothing to review in ' + (key ? FinEngine.keyLabel(key) : 'this month') + '.'"></p>
                                 <p class="text-xs text-zinc-400">Import a CSV from your bank - or connect SimpleFIN in Settings - and each transaction shows up here as a draft.</p>
+                            </div>
+                            <!-- drafts homed in other months (by transaction date):
+                                 visible so nothing silently waits, one click away -->
+                            <div x-show="otherPending.length" class="mt-3 pt-3 border-t border-zinc-100 flex items-center gap-1.5 flex-wrap">
+                                <span class="text-[11px] text-zinc-400 select-none">Also waiting:</span>
+                                <template x-for="m in otherPending" :key="m.key">
+                                    <button type="button" @click="gotoMonth(m.key)"
+                                        :title="'Switch to ' + m.label + ' to review these'"
+                                        class="text-[11px] border border-zinc-200 hover:border-sky-400 hover:text-sky-700 dark:hover:text-sky-400 text-zinc-500 rounded-full px-2.5 py-1 cursor-pointer transition-colors"
+                                        x-text="m.label + ' (' + m.count + ')'"></button>
+                                </template>
                             </div>
                         </div>
 

@@ -332,6 +332,40 @@ describe('suggestTarget', () => {
     });
 });
 
+describe('homeMonthKey + month-scoped pendingCount', () => {
+    let db;
+    beforeEach(() => {
+        db = makeDb();
+        db.months['2026-09'] = { key: '2026-09', status: 'closed', groups: [] };
+        I.applyOps(db, [{ op: 'addItems', accountId: 'acct-1', items: [
+            { fp: 'a', date: '2026-10-05', label: 'OCT THING', amount: 1 },
+            { fp: 'b', date: '2026-09-28', label: 'SEP THING', amount: 2 },
+            { fp: 'c', date: '2026-08-01', label: 'ANCIENT', amount: 3 },   // before the books
+            { fp: 'd', date: '2026-11-02', label: 'POST-DATED', amount: 4 }, // after the latest month
+            { fp: 'e', date: null, dateRaw: 'huh', label: 'NO DATE', amount: 5 },
+        ] }]);
+    });
+
+    const home = (fp) => I.homeMonthKey(db, db.imports.items.find((i) => i.fp === fp));
+
+    it('homes by transaction date, clamped to existing months', () => {
+        expect(home('a')).toBe('2026-10');
+        expect(home('b')).toBe('2026-09');
+        expect(home('c')).toBe('2026-09'); // older than the books → earliest
+        expect(home('d')).toBe('2026-10'); // post-dated → latest
+        // no parseable date → the month it was imported (added is "now")
+        expect(home('e')).toBe(new Date().toISOString().slice(0, 7));
+    });
+
+    it('pendingCount scopes by home month when a key is given', () => {
+        expect(I.pendingCount(db)).toBe(5);
+        expect(I.pendingCount(db, '2026-09')).toBe(2); // sep + clamped ancient
+        expect(I.pendingCount(db, '2026-10') >= 2).toBe(true); // oct + post-dated (+ e if this month)
+        I.applyOps(db, [{ op: 'patchItem', id: db.imports.items[1].id, set: { status: 'dismissed' } }]);
+        expect(I.pendingCount(db, '2026-09')).toBe(1);
+    });
+});
+
 describe('rules lookup', () => {
     it('matches on the normalized merchant per account', () => {
         const db = makeDb();

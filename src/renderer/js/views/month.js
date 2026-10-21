@@ -312,8 +312,8 @@ function monthView () {
         // toString…) - inside Alpine's `with`-based expression scope they
         // resolve to the prototype method of the nearest scope object.
         rateOf (field) { return FinEngine.fieldValue(this.month, field); },
-        // bank-import inbox (views/inbox.js): drafts awaiting review anywhere
-        get pendingImports () { return FinImporter.pendingCount(this.db); },
+        // bank-import inbox (views/inbox.js): drafts belonging to THIS month
+        get pendingImports () { return FinImporter.pendingCount(this.db, this.key); },
         importedTitle (field) {
             const items = (this.db && this.db.imports && this.db.imports.items) || [];
             const item = items.find((i) => i.id === field.importId);
