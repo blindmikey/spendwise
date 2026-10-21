@@ -49,9 +49,13 @@ if (!window.api) {
         // server-side session revocation; the reload after it lands on the
         // login page (the dev preview has no sessions - logout is a no-op 200)
         logout: call('logout'),
-        // no shell here: the browser opens the release page itself
+        // no shell here: the browser opens these pages itself
         openReleases: async () => {
             window.open('https://github.com/blindmikey/spendwise/releases/latest', '_blank', 'noopener,noreferrer');
+            return { ok: true };
+        },
+        openSimplefinSite: async () => {
+            window.open('https://bridge.simplefin.org/', '_blank', 'noopener,noreferrer');
             return { ok: true };
         },
     };

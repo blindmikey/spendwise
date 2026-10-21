@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('api', {
     migrateLegacy: invoke('db:migrate-legacy'),
     checkUpdate: invoke('update:check'),
     openReleases: invoke('update:open'),
+    openSimplefinSite: invoke('sf:open-site'),
     remoteStatus: invoke('remote:status'),
     remoteLogin: invoke('remote:login'),
     remoteLogout: invoke('remote:logout'),

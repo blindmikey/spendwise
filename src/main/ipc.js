@@ -167,11 +167,15 @@ export async function registerIpc () {
         return ok(); // renderer reloads; the local db has been open all along
     });
 
-    // Opening the release page is the ONLY external URL the app will launch,
-    // so it's pinned to the project's own releases rather than taking a URL
-    // from the renderer - a compromised page can't turn this into a launcher.
+    // External URLs the app will launch are PINNED constants (never taken
+    // from the renderer, so a compromised page can't turn these into a
+    // launcher): the project's releases page, and SimpleFIN's bridge site.
     handle('update:open', async () => {
         await shell.openExternal(RELEASES_URL);
+        return ok();
+    });
+    handle('sf:open-site', async () => {
+        await shell.openExternal('https://bridge.simplefin.org/');
         return ok();
     });
 

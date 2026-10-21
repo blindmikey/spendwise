@@ -59,13 +59,14 @@
    (inbox.js finish()). */
 @keyframes import-leave {
     0%, 35% { opacity: 1; max-height: 6rem; }
-    70% { opacity: 0; max-height: 6rem; }
+    /* the row holds its space until FULLY faded, then collapses fast */
+    87% { opacity: 0; max-height: 6rem; }
     100% { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; border-color: transparent; }
 }
 .import-leave {
     overflow: hidden;
     pointer-events: none;
-    animation: import-leave 1.2s ease forwards;
+    animation: import-leave 1.15s ease forwards;
 }
 
 /* Only the fields are meant to be selectable — dragging across a row or

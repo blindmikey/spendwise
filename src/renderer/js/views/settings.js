@@ -1,4 +1,4 @@
-/* global Alpine, FinEngine, fmt, showToast, confirmDialog, simplefinControls, unwrap */
+/* global Alpine, FinEngine, fmt, showToast, confirmDialog, simplefinControls, readBankFile, unwrap */
 'use strict';
 
 function settingsView (primary = false) {
@@ -349,6 +349,22 @@ function settingsView (primary = false) {
                 Object.assign(this.web, unwrap(await window.api.webSet({ enabled: this.web.enabled, port: this.web.port, trustProxy: this.web.trustProxy, secureCookie: this.web.secureCookie })));
                 showToast('Reverse-proxy settings saved', 'success');
             } catch (e) { showToast(e.message, 'error', 7000); }
+        },
+
+        // ------------------------------------------------------- bank files
+
+        /** CSV/.xlsx → rows → hand to the inbox's mapping step (ui.inboxCsv). */
+        async pickBankFile (ev) {
+            const file = ev.target.files && ev.target.files[0];
+            ev.target.value = ''; // allow re-picking the same file later
+            if (!file) return;
+            try {
+                this.ui.inboxCsv = await readBankFile(file);
+                this.ui.view = 'month'; // the inbox (and its month context) live there
+                this.ui.modals.inbox = true;
+            } catch (e) {
+                showToast(e.message, 'error', 8000);
+            }
         },
 
         // ------------------------------------------------------------ data

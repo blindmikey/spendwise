@@ -35,6 +35,8 @@ document.addEventListener('alpine:init', () => {
         mergePick: null,
         mergePickChoose: null, // set by inboxView: (fieldId) → complete the merge
         mergePickCancel: null, // set by inboxView: () → abandon, reopen modal
+        sfConnected: false, // SimpleFIN connected: gates the sidebar inbox button
+        inboxCsv: null, // parsed file rows handed from Settings to the inbox's mapping step
         recomputeChanges: [],
         importSummary: null,
         importMap: { folder: '', groups: [] },
@@ -187,6 +189,12 @@ function appRoot () {
             this.startPolling();
             this.guardUnsaved();
             this.checkUpdate(); // deliberately not awaited - never delays first paint
+            // SimpleFIN connection gates the sidebar inbox button; best-effort
+            if (window.api.simplefinStatus) {
+                window.api.simplefinStatus()
+                    .then((r) => { if (r && r.ok) Alpine.store('ui').sfConnected = !!r.connected; })
+                    .catch(() => { /* the Settings panel reports the details */ });
+            }
         },
 
         /**

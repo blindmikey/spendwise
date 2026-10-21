@@ -115,6 +115,12 @@ function inboxView () {
                 this.tab = 'review';
                 this.prepareEdits();
                 this.loadSfStatus();
+                // a file picked in Settings lands here, straight into mapping
+                const pre = this.ui.inboxCsv;
+                if (pre) {
+                    this.ui.inboxCsv = null;
+                    this.loadRows(pre);
+                }
                 this.$nextTick(() => this.consumeReveal());
             });
             // a badge click while the modal is ALREADY open still reveals
@@ -497,28 +503,20 @@ function inboxView () {
 
         // -------------------------------------------------------- CSV import
 
-        pickFile (ev) {
-            const file = ev.target.files && ev.target.files[0];
-            ev.target.value = ''; // allow re-picking the same file later
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = () => {
-                const rows = FinImporter.parseCsv(String(reader.result || ''));
-                if (!rows.length) { showToast('That file looks empty.', 'error'); return; }
-                const map = FinImporter.detectColumns(rows);
-                const txs = FinImporter.buildTransactions(rows, map);
-                this.csv = {
-                    fileName: file.name,
-                    rows,
-                    map,
-                    expensesNegative: FinImporter.detectExpensesNegative(txs),
-                    accountId: (this.accounts[0] && this.accounts[0].id) || '',
-                };
-                this.newAcctLabel = '';
-                this.importing = true;
+        /** Rows parsed from a bank file (handed over by Settings via
+            ui.inboxCsv) → the column-mapping step. */
+        loadRows ({ fileName, rows }) {
+            const map = FinImporter.detectColumns(rows);
+            const txs = FinImporter.buildTransactions(rows, map);
+            this.csv = {
+                fileName,
+                rows,
+                map,
+                expensesNegative: FinImporter.detectExpensesNegative(txs),
+                accountId: (this.accounts[0] && this.accounts[0].id) || '',
             };
-            reader.onerror = () => showToast('Could not read that file.', 'error');
-            reader.readAsText(file);
+            this.newAcctLabel = '';
+            this.importing = true;
         },
 
         /** Column choices for the mapping selects, labeled by header or sample. */

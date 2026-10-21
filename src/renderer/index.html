@@ -828,14 +828,17 @@
                                             class="w-full bg-white dark:bg-zinc-100 border border-zinc-300 hover:border-zinc-500 hover:text-zinc-700 text-zinc-600 font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors disabled:text-zinc-300 disabled:border-zinc-200">Cancel editing</button>
                                     </div>
                                 </template>
-                                <!-- bank-import inbox: loud while drafts wait, quiet otherwise -->
+                                <!-- bank-import inbox: loud while drafts wait, grey when the
+                                     queue is clear. Only shown once imports are a thing here -
+                                     SimpleFIN connected, or file-imported drafts waiting. -->
                                 <button type="button" @click="$store.ui.modals.inbox = true"
+                                    x-show="$store.ui.sfConnected || pendingImports > 0"
                                     class="w-full font-bold uppercase tracking-widest text-sm rounded-md px-5 py-3.5 cursor-pointer transition-colors border"
                                     :class="pendingImports > 0
                                         ? 'bg-sky-50 dark:bg-sky-500/10 border-sky-300 dark:border-sky-500/30 text-sky-700 dark:text-sky-400 hover:border-sky-500'
-                                        : 'bg-white dark:bg-zinc-100 border-zinc-300 dark:border-[#c7e0da]/20 text-zinc-600 dark:text-[#c7e0da]/90 hover:border-sky-400 hover:text-sky-700 dark:hover:text-sky-400'">
+                                        : 'bg-white dark:bg-zinc-100 border-zinc-300 dark:border-[#c7e0da]/20 text-zinc-400 dark:text-[#c7e0da]/50 hover:border-zinc-400 hover:text-zinc-600 dark:hover:text-[#c7e0da]/80'">
                                     <svg class="w-3.5 h-3.5 inline-block -mt-0.5 mr-1.5"><use href="#i-import"/></svg>
-                                    <span x-text="pendingImports > 0 ? 'Review imports (' + pendingImports + ')' : 'Import bank transactions'"></span>
+                                    <span x-text="'Review imports' + (pendingImports > 0 ? ' (' + pendingImports + ')' : '')"></span>
                                 </button>
                                 <div class="mt-4 uppercase font-bold text-[11px] tracking-widest text-zinc-400 justify-between opacity-60 hidden md:flex whitespace-nowrap"><span>Save <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+S</kbd></span><span>Undo/Redo <kbd class="border border-zinc-300 rounded-sm py-px px-1">Ctrl+(⇧)Z</kbd></span><span>Search <kbd class="border border-zinc-300 rounded-sm py-px px-1" x-text="window.IS_WEB ? 'Ctrl+K' : 'Ctrl+F'"></kbd></span></div>
                             </div>
@@ -1314,8 +1317,14 @@
                                 <h3 class="uppercase font-bold tracking-widest text-xs text-zinc-400 mb-1 select-none">Bank sync · SimpleFIN</h3>
                                 <template x-if="!sf.connected">
                                     <div>
-                                        <p class="text-xs text-zinc-400 mb-3 leading-relaxed">Pull bank transactions straight into the import inbox - no CSV needed.
-                                            Connect your banks through SimpleFIN Bridge (bridge.simplefin.org, a paid read-only service), then paste the setup token here.</p>
+                                        <p class="text-xs text-zinc-400 mb-2 leading-relaxed">Pull your bank transactions straight into the import inbox - each one arrives as a
+                                            draft to add, merge, or dismiss, and nothing touches your books until you say so.
+                                            <span class="font-semibold text-zinc-500">SimpleFIN Bridge</span> is an independent, read-only service (about $1.50/month)
+                                            that connects to your banks and hands this app just the transactions - your bank login never goes anywhere near Spend Wise.</p>
+                                        <p class="text-xs text-zinc-400 mb-3 leading-relaxed">Create an account at
+                                            <button type="button" @click="window.api.openSimplefinSite && window.api.openSimplefinSite()"
+                                                class="text-emerald-700 dark:text-emerald-400 font-semibold hover:underline cursor-pointer">bridge.simplefin.org</button>,
+                                            connect your banks there, then paste the setup token it gives you:</p>
                                         <div class="flex items-center gap-1.5">
                                             <input type="password" x-model="sf.token" :disabled="$store.ui.offline || sf.busy" autocomplete="off"
                                                 placeholder="Paste your SimpleFIN setup token…" @keydown.enter="connectSf()"
@@ -1346,6 +1355,20 @@
                                             items, accounts, and rules all stay.</p>
                                     </div>
                                 </template>
+
+                                <!-- one-off file imports (works with or without SimpleFIN):
+                                     opens the inbox's column-mapping step with the parsed file -->
+                                <div class="mt-4 pt-4 border-t border-zinc-100">
+                                    <label class="inline-block cursor-pointer" :class="$store.ui.offline && 'opacity-40 pointer-events-none'">
+                                        <input type="file" class="hidden" @change="pickBankFile($event)"
+                                            accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+                                        <span class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 inline-flex items-center gap-1.5 transition-colors">
+                                            <svg class="w-3.5 h-3.5"><use href="#i-import"/></svg> Import transactions (CSV / Excel)…
+                                        </span>
+                                    </label>
+                                    <p class="text-[11px] text-zinc-400 mt-2 leading-relaxed">You'll map the file's columns and pick the account before anything is imported;
+                                        duplicates are skipped automatically.</p>
+                                </div>
                             </section>
 
                         </div>
@@ -1440,18 +1463,11 @@
             <div x-data="inboxView()">
                 <div class="flex items-start justify-between gap-3 mb-1">
                     <h2 class="text-lg font-black font-brand text-zinc-800">Imported transactions</h2>
-                    <div x-show="!importing" class="shrink-0 flex items-center gap-2">
-                        <button type="button" x-show="sf.connected" @click="syncSf()" :disabled="sf.busy || offline"
-                            title="Pull the latest transactions from your connected SimpleFIN accounts"
-                            class="inline-flex items-center gap-1.5 bg-white dark:bg-zinc-100 border border-emerald-500/60 hover:border-emerald-500 text-emerald-700 dark:text-emerald-400 font-bold uppercase tracking-widest text-xs rounded-md px-4 py-2.5 cursor-pointer transition-colors disabled:opacity-40"
-                            x-text="sf.busy ? 'Syncing…' : 'Sync'"></button>
-                        <label class="cursor-pointer" :class="offline && 'opacity-40 pointer-events-none'">
-                            <input type="file" accept=".csv,text/csv,text/plain" class="hidden" @change="pickFile($event)">
-                            <span class="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-400/70 dark:text-[#1b1e25] text-white font-bold uppercase tracking-widest text-xs rounded-md px-4 py-2.5 transition-colors">
-                                <svg class="w-3.5 h-3.5"><use href="#i-import"/></svg> Import CSV…
-                            </span>
-                        </label>
-                    </div>
+                    <!-- file imports moved to Settings → Bank sync; Sync stays the everyday action -->
+                    <button type="button" x-show="!importing && sf.connected" @click="syncSf()" :disabled="sf.busy || offline"
+                        title="Pull the latest transactions from your connected SimpleFIN accounts"
+                        class="shrink-0 inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-400/70 dark:text-[#1b1e25] text-white font-bold uppercase tracking-widest text-xs rounded-md px-4 py-2.5 cursor-pointer transition-colors disabled:bg-zinc-200 disabled:text-zinc-400"
+                        x-text="sf.busy ? 'Syncing…' : 'Sync'"></button>
                 </div>
 
                 <!-- ====================== CSV mapping step -->
@@ -1591,16 +1607,21 @@
 
                                         <!-- dismissing: the only "always?" decision there is, asked
                                              in place and only once Dismiss was clicked -->
+                                        <!-- same fixed button grid as the read-only row, shifted one
+                                             slot left: Confirm sits exactly where Dismiss was, so
+                                             dismissing is two clicks without moving the mouse -->
                                         <template x-if="!leaving[item.id] && edits[item.id].dismissing">
                                             <div class="flex items-center gap-2 flex-wrap">
                                                 <span class="flex-1 min-w-40 truncate text-sm text-zinc-500" x-text="'Dismiss “' + item.label + '”?'"></span>
                                                 <button type="button" @click="cancelDismiss(item)"
                                                     class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors border border-zinc-200 text-zinc-500 hover:border-zinc-400 hover:text-zinc-700">Cancel</button>
-                                                <button type="button" @click="dismissItem(item, true)" :disabled="offline || busy"
-                                                    title="Future imports matching this merchant arrive pre-dismissed (undo under Rules)"
-                                                    class="shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-3 py-1.5 cursor-pointer transition-colors border border-red-300 dark:border-red-500/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 disabled:opacity-40">Always this merchant</button>
                                                 <button type="button" @click="dismissItem(item, false)" :disabled="offline || busy"
-                                                    class="shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-3 py-1.5 cursor-pointer transition-colors text-white bg-red-600 hover:bg-red-500 disabled:bg-zinc-200 disabled:text-zinc-400">Just this one</button>
+                                                    class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors text-white bg-red-600 hover:bg-red-500 disabled:bg-zinc-200 disabled:text-zinc-400"
+                                                    x-text="leaveAction(item) === 'dismissed' ? '✓' : 'Confirm'"></button>
+                                                <button type="button" @click="dismissItem(item, true)" :disabled="offline || busy"
+                                                    title="Dismiss AND remember: future imports matching this merchant arrive pre-dismissed (undo under Rules)"
+                                                    class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors border border-red-300 dark:border-red-500/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 disabled:opacity-40">Always</button>
+                                                <span class="w-20 shrink-0" aria-hidden="true"></span>
                                             </div>
                                         </template>
 
@@ -1645,7 +1666,7 @@
                             </template>
                             <div x-show="!pendingItems.length" class="text-center py-10">
                                 <p class="text-sm text-zinc-400 mb-1" x-text="'Nothing to review in ' + (key ? FinEngine.keyLabel(key) : 'this month') + '.'"></p>
-                                <p class="text-xs text-zinc-400">Import a CSV from your bank - or connect SimpleFIN in Settings - and each transaction shows up here as a draft.</p>
+                                <p class="text-xs text-zinc-400">Sync pulls new transactions from SimpleFIN; file imports (CSV / Excel) live in Settings → Bank sync.</p>
                             </div>
                             <!-- drafts homed in other months (by transaction date):
                                  visible so nothing silently waits, one click away -->

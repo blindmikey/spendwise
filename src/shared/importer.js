@@ -71,6 +71,104 @@
         return rows;
     }
 
+    // ----------------------------------------------------------- XLSX parse
+
+    function xmlDecode (s) {
+        return String(s)
+            .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+            .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d))
+            .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+            .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+    }
+
+    function colIndex (letters) {
+        let n = 0;
+        for (const ch of letters) n = n * 26 + (ch.charCodeAt(0) - 64);
+        return n - 1;
+    }
+
+    async function inflateRaw (bytes) {
+        const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+        return new Uint8Array(await new Response(stream).arrayBuffer());
+    }
+
+    /** Minimal ZIP reader: central directory → { path → bytes }. Handles the
+        two methods .xlsx actually uses (stored, deflate). */
+    async function unzip (bytes) {
+        const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        let eocd = -1;
+        for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 22 - 65557); i--) {
+            if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+        }
+        if (eocd < 0) throw new Error('That doesn\'t look like a valid .xlsx file.');
+        const count = dv.getUint16(eocd + 10, true);
+        let off = dv.getUint32(eocd + 16, true);
+        const dec = new TextDecoder();
+        const files = new Map();
+        for (let n = 0; n < count; n++) {
+            if (dv.getUint32(off, true) !== 0x02014b50) break;
+            const method = dv.getUint16(off + 10, true);
+            const csize = dv.getUint32(off + 20, true);
+            const nameLen = dv.getUint16(off + 28, true);
+            const extraLen = dv.getUint16(off + 30, true);
+            const commentLen = dv.getUint16(off + 32, true);
+            const localOff = dv.getUint32(off + 42, true);
+            const name = dec.decode(bytes.subarray(off + 46, off + 46 + nameLen));
+            // the local header's name/extra lengths can differ from the
+            // central copies - trust the local ones for the data offset
+            const lNameLen = dv.getUint16(localOff + 26, true);
+            const lExtraLen = dv.getUint16(localOff + 28, true);
+            const start = localOff + 30 + lNameLen + lExtraLen;
+            const data = bytes.subarray(start, start + csize);
+            if (method === 8) files.set(name, await inflateRaw(data));
+            else if (method === 0) files.set(name, data);
+            off += 46 + nameLen + extraLen + commentLen;
+        }
+        return files;
+    }
+
+    const cellText = (xml) => (xml.match(/<t[^>]*>([\s\S]*?)<\/t>/g) || [])
+        .map((t) => xmlDecode(t.replace(/<t[^>]*>|<\/t>/g, ''))).join('');
+
+    /**
+     * .xlsx (ArrayBuffer/Uint8Array) → rows of strings, like parseCsv. Reads
+     * the first worksheet, resolves shared and inline strings; numeric cells
+     * come through as their raw text (date serials are handled by parseDate).
+     */
+    async function parseXlsx (buffer) {
+        const files = await unzip(buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer));
+        const dec = new TextDecoder();
+        const read = (p) => { const b = files.get(p); return b ? dec.decode(b) : ''; };
+        const shared = [];
+        for (const si of read('xl/sharedStrings.xml').match(/<si[\s>][\s\S]*?<\/si>/g) || []) {
+            shared.push(cellText(si));
+        }
+        const sheetPath = [...files.keys()].filter((p) => /^xl\/worksheets\/sheet\d+\.xml$/.test(p))
+            .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))[0];
+        if (!sheetPath) throw new Error('No worksheet found in the .xlsx file.');
+        const rows = [];
+        for (const rowXml of read(sheetPath).match(/<row[\s>][\s\S]*?<\/row>/g) || []) {
+            const row = [];
+            for (const cell of rowXml.match(/<c[\s>][\s\S]*?(?:<\/c>|\/>)/g) || []) {
+                const ref = /r="([A-Z]+)\d+"/.exec(cell);
+                const col = ref ? colIndex(ref[1]) : row.length;
+                const type = (/\st="([^"]+)"/.exec(cell) || [])[1] || 'n';
+                let value;
+                if (type === 'inlineStr') {
+                    value = cellText(cell);
+                } else {
+                    const v = /<v[^>]*>([\s\S]*?)<\/v>/.exec(cell);
+                    value = v ? xmlDecode(v[1]) : '';
+                    if (type === 's') value = shared[Number(value)] !== undefined ? shared[Number(value)] : '';
+                }
+                row[col] = value;
+            }
+            for (let i = 0; i < row.length; i++) { if (row[i] === undefined) row[i] = ''; }
+            if (row.some((c) => String(c).trim() !== '')) rows.push(row);
+        }
+        return rows;
+    }
+
     // ------------------------------------------------------- normalization
 
     /** '$1,234.56', '(12.34)', '12.34-' → signed number; junk → 0. */
@@ -86,7 +184,7 @@
         return neg ? -Math.abs(n) : n;
     }
 
-    /** ISO / US dates → 'YYYY-MM-DD'; anything else → null. */
+    /** ISO / US dates (and Excel date serials) → 'YYYY-MM-DD'; else null. */
     function parseDate (s) {
         const t = String(s == null ? '' : s).trim();
         let m = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/.exec(t); // 2026-10-04, 2026/10/4
@@ -95,6 +193,14 @@
         if (m) {
             const y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
             return `${y}-${String(+m[1]).padStart(2, '0')}-${String(+m[2]).padStart(2, '0')}`;
+        }
+        // Excel stores dates as day counts from 1900 (.xlsx cells): accept a
+        // bare serial in the sane modern range, 1970..2099
+        if (/^\d{5}(\.\d+)?$/.test(t)) {
+            const serial = Number(t);
+            if (serial >= 25569 && serial < 73050) {
+                return new Date(Math.round((serial - 25569) * 86400000)).toISOString().slice(0, 10);
+            }
         }
         return null;
     }
@@ -510,7 +616,7 @@
     }
 
     return {
-        detectDelimiter, parseCsv, parseAmount, parseDate, detectColumns,
+        detectDelimiter, parseCsv, parseXlsx, parseAmount, parseDate, detectColumns,
         buildTransactions, detectExpensesNegative, applySign, withFingerprints,
         normalizeMerchant,
         ensureImports, findRule, applyOps,

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { deflateRawSync } from 'node:zlib';
 import '../src/shared/engine.js';
 import '../src/shared/importer.js';
 
@@ -83,6 +84,105 @@ describe('parseAmount / parseDate', () => {
         expect(I.parseDate('10/4/2026')).toBe('2026-10-04');
         expect(I.parseDate('10-04-26')).toBe('2026-10-04');
         expect(I.parseDate('Oct 4')).toBe(null);
+    });
+
+    it('converts Excel date serials in the sane modern range only', () => {
+        const serial = 46291;
+        const expected = new Date((serial - 25569) * 86400000).toISOString().slice(0, 10);
+        expect(I.parseDate('46291')).toBe(expected);
+        expect(I.parseDate('25569')).toBe('1970-01-01');
+        expect(I.parseDate('99999')).toBe(null); // past 2099
+        expect(I.parseDate('1234')).toBe(null);  // not a serial
+    });
+});
+
+// ---------------------------------------------------------------- XLSX parse
+
+/** Minimal valid ZIP builder (local headers + central directory + EOCD). */
+function makeZip (entries) {
+    const enc = new TextEncoder();
+    const chunks = [];
+    const central = [];
+    let offset = 0;
+    for (const e of entries) {
+        const nameB = Buffer.from(enc.encode(e.name));
+        const raw = Buffer.from(enc.encode(e.data));
+        const method = e.method === undefined ? 8 : e.method;
+        const comp = method === 8 ? deflateRawSync(raw) : raw;
+        const lh = Buffer.alloc(30);
+        lh.writeUInt32LE(0x04034b50, 0);
+        lh.writeUInt16LE(20, 4);
+        lh.writeUInt16LE(method, 8);
+        lh.writeUInt32LE(comp.length, 18);
+        lh.writeUInt32LE(raw.length, 22);
+        lh.writeUInt16LE(nameB.length, 26);
+        const localOff = offset;
+        chunks.push(lh, nameB, comp);
+        offset += 30 + nameB.length + comp.length;
+        const cd = Buffer.alloc(46);
+        cd.writeUInt32LE(0x02014b50, 0);
+        cd.writeUInt16LE(20, 4);
+        cd.writeUInt16LE(20, 6);
+        cd.writeUInt16LE(method, 10);
+        cd.writeUInt32LE(comp.length, 20);
+        cd.writeUInt32LE(raw.length, 24);
+        cd.writeUInt16LE(nameB.length, 28);
+        cd.writeUInt32LE(localOff, 42);
+        central.push(cd, nameB);
+    }
+    const cdBuf = Buffer.concat(central);
+    const eocd = Buffer.alloc(22);
+    eocd.writeUInt32LE(0x06054b50, 0);
+    eocd.writeUInt16LE(entries.length, 8);
+    eocd.writeUInt16LE(entries.length, 10);
+    eocd.writeUInt32LE(cdBuf.length, 12);
+    eocd.writeUInt32LE(offset, 16);
+    return new Uint8Array(Buffer.concat([...chunks, cdBuf, eocd]));
+}
+
+describe('parseXlsx', () => {
+    const SHARED = '<sst><si><t>Date</t></si><si><t>Description</t></si><si><t>Amount</t></si>'
+        + '<si><t>COFFEE &amp; TEA</t></si><si><t>Grocery &lt;Store&gt;</t></si></sst>';
+    const SHEET = '<worksheet><sheetData>'
+        + '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="s"><v>2</v></c></row>'
+        + '<row r="2"><c r="A2"><v>46291</v></c><c r="B2" t="s"><v>3</v></c><c r="C2"><v>-4.5</v></c></row>'
+        + '<row r="3"><c r="A3"><v>46292</v></c><c r="B3" t="inlineStr"><is><t>Inline Merchant</t></is></c><c r="C3"><v>-12.1</v></c></row>'
+        + '<row r="4"><c r="A4"/><c r="C4" t="s"><v>4</v></c></row>'
+        + '</sheetData></worksheet>';
+
+    it('reads sheet rows with shared, inline, and entity-encoded strings', async () => {
+        const zip = makeZip([
+            { name: 'xl/sharedStrings.xml', data: SHARED, method: 0 }, // stored entry path
+            { name: 'xl/worksheets/sheet1.xml', data: SHEET },          // deflated entry path
+        ]);
+        const rows = await I.parseXlsx(zip);
+        expect(rows).toEqual([
+            ['Date', 'Description', 'Amount'],
+            ['46291', 'COFFEE & TEA', '-4.5'],
+            ['46292', 'Inline Merchant', '-12.1'],
+            ['', '', 'Grocery <Store>'],
+        ]);
+    });
+
+    it('feeds the same pipeline as CSV: detection, serial dates, amounts', async () => {
+        const zip = makeZip([
+            { name: 'xl/sharedStrings.xml', data: SHARED },
+            { name: 'xl/worksheets/sheet1.xml', data: SHEET },
+        ]);
+        const rows = await I.parseXlsx(zip);
+        const map = I.detectColumns(rows);
+        expect(map).toMatchObject({ header: true, date: 0, desc: 1, amount: 2 });
+        const txs = I.buildTransactions(rows, map);
+        expect(txs[0]).toMatchObject({
+            date: new Date((46291 - 25569) * 86400000).toISOString().slice(0, 10),
+            label: 'COFFEE & TEA',
+            amount: -4.5,
+        });
+        expect(I.detectExpensesNegative(txs)).toBe(true);
+    });
+
+    it('rejects non-zip garbage with a friendly error', async () => {
+        await expect(I.parseXlsx(new Uint8Array([1, 2, 3, 4]))).rejects.toThrow(/valid \.xlsx/i);
     });
 });
 

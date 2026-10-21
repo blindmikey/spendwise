@@ -1,4 +1,4 @@
-/* global Alpine, FinEngine */
+/* global Alpine, FinEngine, FinImporter */
 'use strict';
 
 const E = FinEngine;
@@ -108,6 +108,7 @@ function simplefinControls () {
                 this.sf.connected = res.connected;
                 this.sf.lastSync = res.lastSync;
                 this.sf.loaded = true;
+                this.ui.sfConnected = res.connected; // the sidebar button keys on this
             } catch { /* the panel just shows the connect form */ }
         },
 
@@ -124,6 +125,7 @@ function simplefinControls () {
                 unwrap(await window.api.simplefinSetup({ token }));
                 this.sf.token = '';
                 this.sf.connected = true;
+                this.ui.sfConnected = true;
                 showToast('Connected to SimpleFIN', 'success');
                 await this.syncSf();
             } catch (e) {
@@ -164,12 +166,42 @@ function simplefinControls () {
                 unwrap(await window.api.simplefinDisconnect());
                 this.sf.connected = false;
                 this.sf.lastSync = null;
+                this.ui.sfConnected = false;
                 showToast('SimpleFIN disconnected', 'info');
             } catch (e) {
                 showToast(e.message, 'error', 7000);
             }
         },
     };
+}
+
+/**
+ * Read a bank export file (CSV or .xlsx) into rows for the import inbox's
+ * mapping step. Used by the Settings "Import transactions" button; the
+ * parsed rows are handed to the inbox via ui.inboxCsv.
+ */
+function readBankFile (file) {
+    return new Promise((resolve, reject) => {
+        if (/\.xls$/i.test(file.name)) {
+            return reject(new Error('Legacy .xls isn\'t supported - save it as .xlsx or CSV.'));
+        }
+        const isXlsx = /\.xlsx$/i.test(file.name);
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Could not read that file.'));
+        reader.onload = async () => {
+            try {
+                const rows = isXlsx
+                    ? await FinImporter.parseXlsx(reader.result)
+                    : FinImporter.parseCsv(String(reader.result || ''));
+                if (!rows.length) return reject(new Error('That file looks empty.'));
+                resolve({ fileName: file.name, rows });
+            } catch (e) {
+                reject(e);
+            }
+        };
+        if (isXlsx) reader.readAsArrayBuffer(file);
+        else reader.readAsText(file);
+    });
 }
 
 /** Unwrap an IPC response; throws on { ok: false } and shows nothing itself. */
