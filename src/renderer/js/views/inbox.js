@@ -162,7 +162,10 @@ function inboxView () {
                 const date = this.dateLabel(item);
                 this.edits[item.id] = {
                     label: item.label + (date ? ' · ' + date : ''),
-                    amount: FinEngine.num(item.amount),
+                    // a STRING, two decimals: bank amounts are cents-exact and
+                    // must read that way ("4.50", not the float's "4.5") -
+                    // publish parses through num() either way
+                    amount: FinEngine.num(item.amount).toFixed(2),
                     groupId,
                     targetId,
                     always: false,
