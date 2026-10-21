@@ -1141,7 +1141,15 @@
                                             <button x-show="!isWeb && !isRemote" type="button" @click="changeLocation()" class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors">Move / share database…</button>
                                             <button x-show="!isWeb && !isRemote" type="button" @click="exportDb()" class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors">Export a copy…</button>
                                             <button type="button" @click="loadBackups()" class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 cursor-pointer transition-colors">Backups…</button>
-                                            <button x-show="!isRemote" type="button" @click="importLegacy()" class="text-xs border border-amber-300 dark:border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 rounded-md px-3 py-2 cursor-pointer transition-colors">Import legacy data…</button>
+                                            <!-- bank-file imports (CSV/.xlsx) → the inbox's column-mapping
+                                                 step; lives here with the other data actions -->
+                                            <label class="cursor-pointer" :class="$store.ui.offline && 'opacity-40 pointer-events-none'">
+                                                <input type="file" class="hidden" @change="pickBankFile($event)"
+                                                    accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+                                                <span class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 inline-flex items-center gap-1.5 transition-colors">
+                                                    <svg class="w-3.5 h-3.5"><use href="#i-import"/></svg> Import transactions (CSV / Excel)…
+                                                </span>
+                                            </label>
                                         </div>
 
                                         <p class="text-[11px] text-zinc-400 mt-4 leading-relaxed">
@@ -1356,19 +1364,6 @@
                                     </div>
                                 </template>
 
-                                <!-- one-off file imports (works with or without SimpleFIN):
-                                     opens the inbox's column-mapping step with the parsed file -->
-                                <div class="mt-4 pt-4 border-t border-zinc-100">
-                                    <label class="inline-block cursor-pointer" :class="$store.ui.offline && 'opacity-40 pointer-events-none'">
-                                        <input type="file" class="hidden" @change="pickBankFile($event)"
-                                            accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
-                                        <span class="text-xs border border-zinc-300 hover:bg-zinc-100 text-zinc-600 rounded-md px-3 py-2 inline-flex items-center gap-1.5 transition-colors">
-                                            <svg class="w-3.5 h-3.5"><use href="#i-import"/></svg> Import transactions (CSV / Excel)…
-                                        </span>
-                                    </label>
-                                    <p class="text-[11px] text-zinc-400 mt-2 leading-relaxed">You'll map the file's columns and pick the account before anything is imported;
-                                        duplicates are skipped automatically.</p>
-                                </div>
                             </section>
 
                         </div>
@@ -1576,14 +1571,19 @@
                                         :class="leaving[item.id] && leaving[item.id].go && 'import-leave'">
 
                                         <!-- read-only (the default): uniform fixed-width columns; the
-                                             date lives in the prefilled label, no separate column -->
-                                        <template x-if="!edits[item.id].editing && !edits[item.id].dismissing">
+                                             date lives in the prefilled label, no separate column.
+                                             Dismissing swaps ONLY the three buttons (Confirm under
+                                             Dismiss, Always under Merge, Cancel under Add) - label,
+                                             source, and amount never move. -->
+                                        <template x-if="!edits[item.id].editing">
                                             <div class="flex items-center gap-2 flex-wrap">
                                                 <span class="flex-1 min-w-40 truncate text-sm text-zinc-700 dark:text-[#c7e0da]" x-text="edits[item.id].label"></span>
                                                 <span class="shrink-0 max-w-40 truncate text-[11px] text-zinc-400 select-none" x-text="accountLabel(item.accountId)"></span>
                                                 <span class="w-24 shrink-0 text-right text-sm font-semibold tabular-nums"
                                                     :class="item.amount < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-700 dark:text-[#c7e0da]'"
                                                     x-text="fmtExact(item.amount)"></span>
+                                                <template x-if="!edits[item.id].dismissing">
+                                                    <div class="contents">
                                                 <button type="button" @click="startDismiss(item)" :disabled="offline || busy"
                                                     title="Ignore this transaction - it moves to Processed and can be restored"
                                                     class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors border disabled:opacity-40"
@@ -1602,17 +1602,10 @@
                                                     title="Add as a new row - review the label, amount, and group first"
                                                     class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors text-white bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-400/70 dark:text-[#1b1e25] disabled:bg-zinc-200 disabled:text-zinc-400"
                                                     x-text="leaveAction(item) === 'added' ? '✓' : 'Add'"></button>
-                                            </div>
-                                        </template>
-
-                                        <!-- dismissing: the only "always?" decision there is, asked
-                                             in place and only once Dismiss was clicked -->
-                                        <!-- the same three slots as Dismiss / Merge / Add: Confirm
-                                             sits exactly where Dismiss was (two clicks, no mouse
-                                             travel), Always under Merge, Cancel under Add -->
-                                        <template x-if="!leaving[item.id] && edits[item.id].dismissing">
-                                            <div class="flex items-center gap-2 flex-wrap">
-                                                <span class="flex-1 min-w-40 truncate text-sm text-zinc-500" x-text="'Dismiss “' + item.label + '”?'"></span>
+                                                    </div>
+                                                </template>
+                                                <template x-if="edits[item.id].dismissing">
+                                                    <div class="contents">
                                                 <button type="button" @click="dismissItem(item, false)" :disabled="offline || busy"
                                                     class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors text-white bg-red-600 hover:bg-red-500 disabled:bg-zinc-200 disabled:text-zinc-400"
                                                     x-text="leaveAction(item) === 'dismissed' ? '✓' : 'Confirm'"></button>
@@ -1621,6 +1614,8 @@
                                                     class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors border border-red-300 dark:border-red-500/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 disabled:opacity-40">Always</button>
                                                 <button type="button" @click="cancelDismiss(item)"
                                                     class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors border border-zinc-200 text-zinc-500 hover:border-zinc-400 hover:text-zinc-700">Cancel</button>
+                                                    </div>
+                                                </template>
                                             </div>
                                         </template>
 
