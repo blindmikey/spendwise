@@ -1572,18 +1572,20 @@
                                                     title="Ignore this transaction - it moves to Processed and can be restored"
                                                     class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors border disabled:opacity-40"
                                                     :class="leaveAction(item) === 'dismissed'
-                                                        ? 'import-active import-active-red bg-red-600 border-red-600 text-white dark:text-[#1b1e25]'
-                                                        : 'border-zinc-200 text-zinc-500 hover:border-red-400 hover:text-red-600 dark:hover:text-red-400'">Dismiss</button>
+                                                        ? 'bg-red-600 border-red-600 text-white dark:text-[#1b1e25]'
+                                                        : 'border-zinc-200 text-zinc-500 hover:border-red-400 hover:text-red-600 dark:hover:text-red-400'"
+                                                    x-text="leaveAction(item) === 'dismissed' ? '✓' : 'Dismiss'"></button>
                                                 <button type="button" @click="startMergePick(item)" :disabled="frozen || offline || busy"
                                                     title="Fill an existing row of this month with this amount - pick the row on the month itself"
                                                     class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors border disabled:opacity-40"
                                                     :class="leaveAction(item) === 'merged'
-                                                        ? 'import-active import-active-violet bg-violet-600 border-violet-600 text-white dark:text-[#1b1e25]'
-                                                        : 'border-violet-300 dark:border-violet-500/40 text-violet-700 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/10 disabled:hover:bg-transparent'">Merge</button>
+                                                        ? 'bg-violet-600 border-violet-600 text-white dark:text-[#1b1e25]'
+                                                        : 'border-violet-300 dark:border-violet-500/40 text-violet-700 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/10 disabled:hover:bg-transparent'"
+                                                    x-text="leaveAction(item) === 'merged' ? '✓' : 'Merge'"></button>
                                                 <button type="button" @click="startAdd(item)" :disabled="frozen || offline || busy"
                                                     title="Add as a new row - review the label, amount, and group first"
                                                     class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors text-white bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-400/70 dark:text-[#1b1e25] disabled:bg-zinc-200 disabled:text-zinc-400"
-                                                    :class="leaveAction(item) === 'added' && 'import-active import-active-emerald'">Add</button>
+                                                    x-text="leaveAction(item) === 'added' ? '✓' : 'Add'"></button>
                                             </div>
                                         </template>
 

@@ -53,28 +53,20 @@
 }
 
 /* import inbox: a handled draft keeps its row as-is while the chosen
-   action's button (import-active) pulses, then the row slides right and
-   fades, and the list collapses the space. One timeline, phase-aligned:
-   the hold (0-42% ≈ 0.63s) is exactly the two button pulses. forwards
-   holds the collapsed end state until the row unmounts (inbox.js finish()). */
+   action's button shows a solid check (markup), holds a beat, then the
+   row fades out and the list collapses the space - one timeline.
+   forwards holds the collapsed end state until the row unmounts
+   (inbox.js finish()). */
 @keyframes import-leave {
-    0%, 42% { opacity: 1; transform: translateX(0); max-height: 6rem; }
-    72% { opacity: 0; transform: translateX(2.5rem); max-height: 6rem; }
-    100% { opacity: 0; transform: translateX(2.5rem); max-height: 0; padding-top: 0; padding-bottom: 0; border-color: transparent; }
+    0%, 35% { opacity: 1; max-height: 6rem; }
+    70% { opacity: 0; max-height: 6rem; }
+    100% { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; border-color: transparent; }
 }
 .import-leave {
     overflow: hidden;
     pointer-events: none;
-    animation: import-leave 1.5s ease forwards;
+    animation: import-leave 1.2s ease forwards;
 }
-@keyframes import-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 transparent; }
-    50% { box-shadow: 0 0 0 5px var(--pulse, rgb(16 185 129 / 0.5)); }
-}
-.import-leave .import-active { animation: import-pulse 0.32s ease 2; }
-.import-active-emerald { --pulse: rgb(16 185 129 / 0.5); }
-.import-active-violet { --pulse: rgb(139 92 246 / 0.5); }
-.import-active-red { --pulse: rgb(239 68 68 / 0.5); }
 
 /* Only the fields are meant to be selectable — dragging across a row or
    double-clicking a button shouldn't highlight the app's own words. Editable

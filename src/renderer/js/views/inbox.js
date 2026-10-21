@@ -169,10 +169,11 @@ function inboxView () {
 
         /**
          * Completion: the row stays as-is while the chosen action's button
-         * lights up and pulses, then slides away (import-leave, input.css).
-         * `go: false` keeps the already-processed row mounted without starting
-         * the animation yet - the merge flow uses the delay so the modal is
-         * visibly back before anything moves.
+         * shows a solid check, then the row fades and the list collapses the
+         * space (import-leave, input.css). `go: false` keeps the
+         * already-processed row mounted without starting the animation yet -
+         * the merge flow uses the delay so the modal is visibly back before
+         * anything moves.
          */
         finish (item, action, delay = 0) {
             this.leaving[item.id] = { action, go: !delay };
@@ -185,7 +186,7 @@ function inboxView () {
             setTimeout(() => {
                 delete this.leaving[item.id];
                 delete this.edits[item.id];
-            }, delay + 1600); // import-leave runs 1.5s
+            }, delay + 1300); // import-leave runs 1.2s
         },
 
         /** The action whose button shows its active (completing) state. */
