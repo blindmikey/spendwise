@@ -92,7 +92,7 @@ function inboxView () {
             return this.month.groups
                 .filter((g) => g.kind === 'expense'
                     || (g.kind === 'income' && (credit || g.groupId === e.groupId)))
-                .map((g) => ({ groupId: g.groupId, title: g.title + (g.kind === 'income' ? ' (+)' : '') }));
+                .map((g) => ({ groupId: g.groupId, title: g.title }));
         },
 
         // ------------------------------------------------------- lifecycle
