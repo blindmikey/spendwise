@@ -122,13 +122,14 @@ locally without touching a stored password. The dev server takes
 `npm run css:watch` rebuilds Tailwind on change. `npm run dist` currently only
 targets Windows (NSIS + portable); macOS and Linux run from source.
 
-**Node 18 is the supported floor** (`engines` in package.json), verified by
-running the suite and a full server round trip on 18.20.7 as well as 22. One
-wrinkle worth knowing: Node 18 has no global `crypto` - it became a global in
-19 - and `engine.js` is UMD, so it reads `uuid()` off the global and would
-otherwise fall back to `Math.random`. `src/server/cli.mjs` installs
-`node:crypto`'s `webcrypto` onto the global before anything loads. Electron and
-Node 20+ already have it, so the shim is a no-op there.
+**Node 22 is the supported floor** (`engines` in package.json). Node 18 and 20
+are end-of-life and no longer receive security fixes, so the floor moved up in
+1.1.5. One wrinkle worth knowing: Node 18 had no global `crypto` - it became a
+global in 19 - and `engine.js` is UMD, so it reads `uuid()` off the global and
+would otherwise fall back to `Math.random`. `src/server/cli.mjs` still installs
+`node:crypto`'s `webcrypto` onto the global before anything loads, so an
+unsupported old Node that slips past `engines` (npm only warns) degrades safely
+instead of silently weakening uuids.
 
 > Careful when probing this: `node -e` / `--input-type=module` exposes a global
 > `crypto` that a real `.mjs` file on Node 18 does **not** have. Test version

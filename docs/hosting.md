@@ -14,9 +14,9 @@ One process owns the database, so everyone editing through it merges cleanly.
 
 ## Install
 
-**Node 18 or newer.** The full suite plus a live login → edit → merge →
-close-out round trip is verified on Node 18 and 22; the Docker image ships
-Node 22.
+**Node 22 or newer.** Node 18 and 20 are end-of-life and no longer receive
+security fixes. The full suite plus a live login → edit → merge → close-out
+round trip is verified on Node 22; the Docker image ships Node 22.
 
 
 ```bash

@@ -18,7 +18,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       # electron-builder names artifacts from package.json, not the tag, so a

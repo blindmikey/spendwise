@@ -31,10 +31,11 @@ import { webcrypto } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { openDb } from '../main/db-open.js';
 
-// node 18 has no global `crypto` (it became one in 19). The shared engine is
+// node 18 had no global `crypto` (it became one in 19). The shared engine is
 // UMD and reads uuid() off the global, so without this it would silently drop
 // to its Math.random fallback here - fine for uniqueness, but needlessly weak
-// when a CSPRNG is one import away. Electron and node 20+ already have it.
+// when a CSPRNG is one import away. Supported node (22+, see `engines`) always
+// has it; this keeps an unsupported older node safe if it slips past the check.
 if (!globalThis.crypto) globalThis.crypto = webcrypto;
 import { createCore } from '../main/api-core.js';
 import { createWebServer } from '../main/webserver.js';
