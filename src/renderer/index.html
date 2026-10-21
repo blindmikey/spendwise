@@ -1552,20 +1552,16 @@
                                 This month is closed - unlock it to publish drafts. Dismissing still works.</p>
                             <template x-for="item in pendingItems" :key="item.id">
                                 <template x-if="edits[item.id]">
+                                    <!-- a completed row stays exactly as it was: the chosen button
+                                         lights up and pulses (leaveAction), then import-leave slides
+                                         the row out and collapses its space (go-gated, so the merge
+                                         flow can hold until the modal is visibly back) -->
                                     <div class="border-t border-zinc-100 py-2.5" :data-import-item="item.id"
-                                        :class="leaving[item.id] && 'import-leave'">
-
-                                        <!-- done: the completion message plays in place, then the row leaves -->
-                                        <template x-if="leaving[item.id]">
-                                            <div class="flex items-center gap-2 py-1 text-sm text-emerald-700 dark:text-emerald-400">
-                                                <svg class="w-4 h-4 shrink-0"><use href="#i-check"/></svg>
-                                                <span class="truncate" x-text="leaving[item.id]"></span>
-                                            </div>
-                                        </template>
+                                        :class="leaving[item.id] && leaving[item.id].go && 'import-leave'">
 
                                         <!-- read-only (the default): uniform fixed-width columns; the
                                              date lives in the prefilled label, no separate column -->
-                                        <template x-if="!leaving[item.id] && !edits[item.id].editing && !edits[item.id].dismissing">
+                                        <template x-if="!edits[item.id].editing && !edits[item.id].dismissing">
                                             <div class="flex items-center gap-2 flex-wrap">
                                                 <span class="flex-1 min-w-40 truncate text-sm text-zinc-700 dark:text-[#c7e0da]" x-text="edits[item.id].label"></span>
                                                 <span class="shrink-0 max-w-40 truncate text-[11px] text-zinc-400 select-none" x-text="accountLabel(item.accountId)"></span>
@@ -1574,13 +1570,20 @@
                                                     x-text="fmtExact(item.amount)"></span>
                                                 <button type="button" @click="startDismiss(item)" :disabled="offline || busy"
                                                     title="Ignore this transaction - it moves to Processed and can be restored"
-                                                    class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors border border-zinc-200 text-zinc-500 hover:border-red-400 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-40">Dismiss</button>
+                                                    class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors border disabled:opacity-40"
+                                                    :class="leaveAction(item) === 'dismissed'
+                                                        ? 'import-active import-active-red bg-red-600 border-red-600 text-white dark:text-[#1b1e25]'
+                                                        : 'border-zinc-200 text-zinc-500 hover:border-red-400 hover:text-red-600 dark:hover:text-red-400'">Dismiss</button>
                                                 <button type="button" @click="startMergePick(item)" :disabled="frozen || offline || busy"
                                                     title="Fill an existing row of this month with this amount - pick the row on the month itself"
-                                                    class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors border border-violet-300 dark:border-violet-500/40 text-violet-700 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/10 disabled:opacity-40 disabled:hover:bg-transparent">Merge</button>
+                                                    class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors border disabled:opacity-40"
+                                                    :class="leaveAction(item) === 'merged'
+                                                        ? 'import-active import-active-violet bg-violet-600 border-violet-600 text-white dark:text-[#1b1e25]'
+                                                        : 'border-violet-300 dark:border-violet-500/40 text-violet-700 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/10 disabled:hover:bg-transparent'">Merge</button>
                                                 <button type="button" @click="startAdd(item)" :disabled="frozen || offline || busy"
                                                     title="Add as a new row - review the label, amount, and group first"
-                                                    class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors text-white bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-400/70 dark:text-[#1b1e25] disabled:bg-zinc-200 disabled:text-zinc-400">Add</button>
+                                                    class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors text-white bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-400/70 dark:text-[#1b1e25] disabled:bg-zinc-200 disabled:text-zinc-400"
+                                                    :class="leaveAction(item) === 'added' && 'import-active import-active-emerald'">Add</button>
                                             </div>
                                         </template>
 

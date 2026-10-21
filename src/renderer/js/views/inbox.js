@@ -167,14 +167,31 @@ function inboxView () {
             }
         },
 
-        /** Completion: show the done-message in place, animate out, then let
-            the row unmount (the item is already processed in the ledger). */
-        finish (item, message) {
-            this.leaving[item.id] = message;
+        /**
+         * Completion: the row stays as-is while the chosen action's button
+         * lights up and pulses, then slides away (import-leave, input.css).
+         * `go: false` keeps the already-processed row mounted without starting
+         * the animation yet - the merge flow uses the delay so the modal is
+         * visibly back before anything moves.
+         */
+        finish (item, action, delay = 0) {
+            this.leaving[item.id] = { action, go: !delay };
+            if (delay) {
+                setTimeout(() => {
+                    const l = this.leaving[item.id];
+                    if (l) l.go = true;
+                }, delay);
+            }
             setTimeout(() => {
                 delete this.leaving[item.id];
                 delete this.edits[item.id];
-            }, 1400); // matches the import-leave animation (input.css)
+            }, delay + 1600); // import-leave runs 1.5s
+        },
+
+        /** The action whose button shows its active (completing) state. */
+        leaveAction (item) {
+            const l = this.leaving[item.id];
+            return l && l.go ? l.action : null;
         },
 
         /**
@@ -312,7 +329,8 @@ function inboxView () {
             const res = await this.apply(ops, () => FinImporter.revert(this.month, { ...item, fieldId: field.id, action: 'published' }));
             if (!res) return;
             e.editing = false;
-            this.finish(item, `Added to ${this.groupTitle(e.groupId) || 'the month'} - press “Update This Month” to save it`);
+            this.finish(item, 'added');
+            showToast(`Added to ${this.groupTitle(e.groupId) || 'the month'} - press “Update This Month” to save it`, 'success', 5000);
         },
 
         // ------------------------------------------------------- merge flow
@@ -372,7 +390,9 @@ function inboxView () {
             const res = await this.apply(ops, () => FinImporter.revert(this.month, { ...item, fieldId, action: 'merged', prev }));
             this.reopenAfterPick();
             if (!res) return;
-            this.finish(item, `Merged into “${field.label || 'unnamed'}” - press “Update This Month” to save it`);
+            // the hold lets the modal be visibly back before the row reacts
+            this.finish(item, 'merged', 700);
+            showToast(`Merged into “${field.label || 'unnamed'}” - press “Update This Month” to save it`, 'success', 5000);
         },
 
         cancelMergePick () {
@@ -412,7 +432,10 @@ function inboxView () {
             }
             const res = await this.apply(ops);
             if (!res) return;
-            this.finish(item, always ? 'Dismissed - future matches arrive pre-dismissed' : 'Dismissed');
+            const e = this.edits[item.id];
+            if (e) e.dismissing = false; // back to the row so its Dismiss button plays the send-off
+            this.finish(item, 'dismissed');
+            if (always) showToast('Future matches of this merchant arrive pre-dismissed', 'info', 4000);
         },
 
         /** Dismissed → back to the drafts. */
