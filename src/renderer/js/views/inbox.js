@@ -161,8 +161,8 @@ function inboxView () {
                     groupId: (rule && rule.groupId)
                         || (incomeGroup && incomeGroup.groupId)
                         || (acct && acct.groupId) || fallback,
-                    always: false,
-                    editing: false, // rows are read-only until "Add" opens them
+                    editing: false,    // read-only until "Add" opens the row
+                    dismissing: false, // Dismiss asks once-or-always inline
                 };
             }
         },
@@ -287,7 +287,7 @@ function inboxView () {
         startAdd (item) {
             if (this.frozen || this.offline) return;
             const e = this.edits[item.id];
-            if (e) e.editing = true;
+            if (e) { e.editing = true; e.dismissing = false; }
         },
 
         cancelAdd (item) {
@@ -391,17 +391,28 @@ function inboxView () {
 
         // ---------------------------------------------------------- dismiss
 
-        async dismissItem (item) {
-            if (this.offline || this.busy) return;
+        /** Dismiss asks its only question inline, when clicked - once or always. */
+        startDismiss (item) {
+            if (this.offline) return;
             const e = this.edits[item.id];
+            if (e) { e.dismissing = true; e.editing = false; }
+        },
+
+        cancelDismiss (item) {
+            const e = this.edits[item.id];
+            if (e) e.dismissing = false;
+        },
+
+        async dismissItem (item, always) {
+            if (this.offline || this.busy) return;
             const ops = [{ op: 'patchItem', id: item.id, set: { status: 'dismissed' } }];
-            if (e && e.always) {
-                const match = FinImporter.normalizeMerchant(item.label);
-                if (match) ops.push({ op: 'saveRule', rule: { accountId: item.accountId, match, action: 'dismiss' } });
+            const match = FinImporter.normalizeMerchant(item.label);
+            if (always && match) {
+                ops.push({ op: 'saveRule', rule: { accountId: item.accountId, match, action: 'dismiss' } });
             }
             const res = await this.apply(ops);
             if (!res) return;
-            this.finish(item, e && e.always ? 'Dismissed - future matches arrive pre-dismissed' : 'Dismissed');
+            this.finish(item, always ? 'Dismissed - future matches arrive pre-dismissed' : 'Dismissed');
         },
 
         /** Dismissed → back to the drafts. */

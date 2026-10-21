@@ -1558,18 +1558,14 @@
 
                                         <!-- read-only (the default): uniform fixed-width columns; the
                                              date lives in the prefilled label, no separate column -->
-                                        <template x-if="!leaving[item.id] && !edits[item.id].editing">
+                                        <template x-if="!leaving[item.id] && !edits[item.id].editing && !edits[item.id].dismissing">
                                             <div class="flex items-center gap-2 flex-wrap">
                                                 <span class="flex-1 min-w-40 truncate text-sm text-zinc-700 dark:text-[#c7e0da]" x-text="edits[item.id].label"></span>
                                                 <span class="shrink-0 max-w-40 truncate text-[11px] text-zinc-400 select-none" x-text="accountLabel(item.accountId)"></span>
                                                 <span class="w-24 shrink-0 text-right text-sm font-semibold tabular-nums"
                                                     :class="item.amount < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-700 dark:text-[#c7e0da]'"
                                                     x-text="fmtExact(item.amount)"></span>
-                                                <label class="flex items-center gap-1 text-[11px] text-zinc-400 cursor-pointer select-none shrink-0"
-                                                    title="Always dismiss this merchant - future imports matching it arrive pre-dismissed (undo under Rules)">
-                                                    <input type="checkbox" x-model="edits[item.id].always" class="accent-zinc-500">always
-                                                </label>
-                                                <button type="button" @click="dismissItem(item)" :disabled="offline || busy"
+                                                <button type="button" @click="startDismiss(item)" :disabled="offline || busy"
                                                     title="Ignore this transaction - it moves to Processed and can be restored"
                                                     class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors border border-zinc-200 text-zinc-500 hover:border-red-400 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-40">Dismiss</button>
                                                 <button type="button" @click="startMergePick(item)" :disabled="frozen || offline || busy"
@@ -1578,6 +1574,21 @@
                                                 <button type="button" @click="startAdd(item)" :disabled="frozen || offline || busy"
                                                     title="Add as a new row - review the label, amount, and group first"
                                                     class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors text-white bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-400/70 dark:text-[#1b1e25] disabled:bg-zinc-200 disabled:text-zinc-400">Add</button>
+                                            </div>
+                                        </template>
+
+                                        <!-- dismissing: the only "always?" decision there is, asked
+                                             in place and only once Dismiss was clicked -->
+                                        <template x-if="!leaving[item.id] && edits[item.id].dismissing">
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <span class="flex-1 min-w-40 truncate text-sm text-zinc-500" x-text="'Dismiss “' + item.label + '”?'"></span>
+                                                <button type="button" @click="cancelDismiss(item)"
+                                                    class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors border border-zinc-200 text-zinc-500 hover:border-zinc-400 hover:text-zinc-700">Cancel</button>
+                                                <button type="button" @click="dismissItem(item, true)" :disabled="offline || busy"
+                                                    title="Future imports matching this merchant arrive pre-dismissed (undo under Rules)"
+                                                    class="shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-3 py-1.5 cursor-pointer transition-colors border border-red-300 dark:border-red-500/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 disabled:opacity-40">Always this merchant</button>
+                                                <button type="button" @click="dismissItem(item, false)" :disabled="offline || busy"
+                                                    class="shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-3 py-1.5 cursor-pointer transition-colors text-white bg-red-600 hover:bg-red-500 disabled:bg-zinc-200 disabled:text-zinc-400">Just this one</button>
                                             </div>
                                         </template>
 
@@ -1641,7 +1652,9 @@
                         <div x-show="tab === 'processed'" class="max-h-[55vh] overflow-y-auto overflow-x-hidden pr-1">
                             <template x-for="item in processedItems" :key="item.id">
                                 <div class="border-t border-zinc-100 py-2 flex items-center gap-2" :data-import-item="item.id">
-                                    <span class="shrink-0 text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded-full select-none"
+                                    <!-- fixed-width chip column so date + label align across rows,
+                                         whatever the status text's length -->
+                                    <span class="shrink-0 w-32 text-center whitespace-nowrap text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded-full select-none"
                                         :class="statusChip(item).cls" x-text="statusChip(item).text"></span>
                                     <span class="w-10 shrink-0 text-[11px] text-zinc-400 tabular-nums select-none" x-text="dateLabel(item)"></span>
                                     <span class="flex-1 min-w-0">
