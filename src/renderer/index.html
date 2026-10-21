@@ -1607,21 +1607,20 @@
 
                                         <!-- dismissing: the only "always?" decision there is, asked
                                              in place and only once Dismiss was clicked -->
-                                        <!-- same fixed button grid as the read-only row, shifted one
-                                             slot left: Confirm sits exactly where Dismiss was, so
-                                             dismissing is two clicks without moving the mouse -->
+                                        <!-- the same three slots as Dismiss / Merge / Add: Confirm
+                                             sits exactly where Dismiss was (two clicks, no mouse
+                                             travel), Always under Merge, Cancel under Add -->
                                         <template x-if="!leaving[item.id] && edits[item.id].dismissing">
                                             <div class="flex items-center gap-2 flex-wrap">
                                                 <span class="flex-1 min-w-40 truncate text-sm text-zinc-500" x-text="'Dismiss “' + item.label + '”?'"></span>
-                                                <button type="button" @click="cancelDismiss(item)"
-                                                    class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors border border-zinc-200 text-zinc-500 hover:border-zinc-400 hover:text-zinc-700">Cancel</button>
                                                 <button type="button" @click="dismissItem(item, false)" :disabled="offline || busy"
                                                     class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors text-white bg-red-600 hover:bg-red-500 disabled:bg-zinc-200 disabled:text-zinc-400"
                                                     x-text="leaveAction(item) === 'dismissed' ? '✓' : 'Confirm'"></button>
                                                 <button type="button" @click="dismissItem(item, true)" :disabled="offline || busy"
                                                     title="Dismiss AND remember: future imports matching this merchant arrive pre-dismissed (undo under Rules)"
                                                     class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors border border-red-300 dark:border-red-500/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 disabled:opacity-40">Always</button>
-                                                <span class="w-20 shrink-0" aria-hidden="true"></span>
+                                                <button type="button" @click="cancelDismiss(item)"
+                                                    class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors border border-zinc-200 text-zinc-500 hover:border-zinc-400 hover:text-zinc-700">Cancel</button>
                                             </div>
                                         </template>
 
