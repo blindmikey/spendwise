@@ -17,7 +17,8 @@
 function inboxView () {
     return {
         tab: 'review',      // review | processed | rules
-        edits: {},          // itemId → { label, amount, groupId, targetId, always }
+        edits: {},          // itemId → { label, amount, groupId, always, editing }
+        leaving: {},        // itemId → done-message: row plays its leave animation
         importing: false,   // CSV mapping step is showing
         csv: null,          // { fileName, rows, map, expensesNegative, accountId }
         newAcctLabel: '',   // inline account creation inside the import step
@@ -53,7 +54,10 @@ function inboxView () {
         // both tabs are scoped to the month being VIEWED, by transaction date -
         // September's bank lines show up while looking at September
         get pendingItems () {
-            return this.items.filter((i) => this.status(i) === 'pending' && this.homeKey(i) === this.key);
+            // leaving rows stay mounted (already processed) until their
+            // done-animation finishes, so completion is visible in place
+            return this.items.filter((i) => this.leaving[i.id]
+                || (this.status(i) === 'pending' && this.homeKey(i) === this.key));
         },
         get processedItems () {
             return this.items.filter((i) => this.status(i) !== 'pending' && this.homeKey(i) === this.key)
@@ -115,6 +119,9 @@ function inboxView () {
             });
             // a badge click while the modal is ALREADY open still reveals
             this.$watch('ui.inboxReveal', (v) => { if (v && this.open) this.$nextTick(() => this.consumeReveal()); });
+            // the month view's merge-pick overlays resolve through the store
+            this.ui.mergePickChoose = (fieldId) => this.completeMergePick(fieldId);
+            this.ui.mergePickCancel = () => this.cancelMergePick();
             // prefills are month-specific (merge targets live in the month)
             this.$watch('key', () => {
                 this.edits = {};
@@ -124,16 +131,14 @@ function inboxView () {
         },
 
         /**
-         * Build the per-draft edit state: a standing rule pre-selects its
-         * destination; otherwise the account's default group plus a loose
-         * merge suggestion. Everything is just pre-selection - the user
-         * confirms each row individually (every action also teaches a rule,
-         * which a bulk action never could).
+         * Build the per-draft edit state: a standing rule pre-selects the
+         * destination group; otherwise the account default (income-first for
+         * bank-account credits, never for cards). Pre-selection only - the
+         * user confirms each row individually (every action also teaches a
+         * rule, which a bulk action never could).
          */
         prepareEdits () {
             if (!this.month) return;
-            const taken = new Set();
-            for (const e of Object.values(this.edits)) { if (e.targetId) taken.add(e.targetId); }
             for (const item of this.pendingItems) {
                 if (this.edits[item.id]) continue;
                 const rule = FinImporter.findRule(this.imports, item.accountId, item.label);
@@ -146,19 +151,6 @@ function inboxView () {
                 // still wins either way, and every correction teaches one.
                 const incomeGroup = FinEngine.num(item.amount) < 0 && !(acct && acct.credit)
                     ? this.month.groups.find((g) => g.kind === 'income') : null;
-                const groupId = (rule && rule.groupId)
-                    || (incomeGroup && incomeGroup.groupId)
-                    || (acct && acct.groupId) || fallback;
-                let targetId = '';
-                if (rule && rule.action === 'merge' && rule.target) {
-                    const g = this.month.groups.find((g) => g.groupId === groupId);
-                    const t = g && g.fields.find((f) => f.label === rule.target && !f.importId && !taken.has(f.id));
-                    if (t) targetId = t.id;
-                } else if (!rule) {
-                    const s = FinImporter.suggestTarget(this.month, groupId, item, taken);
-                    if (s) targetId = s.id;
-                }
-                if (targetId) taken.add(targetId);
                 const date = this.dateLabel(item);
                 this.edits[item.id] = {
                     label: item.label + (date ? ' · ' + date : ''),
@@ -166,11 +158,23 @@ function inboxView () {
                     // must read that way ("4.50", not the float's "4.5") -
                     // publish parses through num() either way
                     amount: FinEngine.num(item.amount).toFixed(2),
-                    groupId,
-                    targetId,
+                    groupId: (rule && rule.groupId)
+                        || (incomeGroup && incomeGroup.groupId)
+                        || (acct && acct.groupId) || fallback,
                     always: false,
+                    editing: false, // rows are read-only until "Add" opens them
                 };
             }
+        },
+
+        /** Completion: show the done-message in place, animate out, then let
+            the row unmount (the item is already processed in the ledger). */
+        finish (item, message) {
+            this.leaving[item.id] = message;
+            setTimeout(() => {
+                delete this.leaving[item.id];
+                delete this.edits[item.id];
+            }, 1400); // matches the import-leave animation (input.css)
         },
 
         /**
@@ -220,20 +224,6 @@ function inboxView () {
             return def ? def.title : '';
         },
 
-        /** Merge targets for a draft: the chosen group's rows not already import-filled. */
-        targetOptions (e) {
-            const g = this.month && this.month.groups.find((x) => x.groupId === e.groupId
-                && (x.kind === 'expense' || x.kind === 'income'));
-            if (!g) return [];
-            return g.fields
-                .filter((f) => !f.importId || f.id === e.targetId)
-                .map((f) => ({ id: f.id, label: `${f.label || '(unnamed)'} (${fmtExact(f.value)})` }));
-        },
-
-        /** The group select moved: a target from the old group would dangle. */
-        groupChanged (e) {
-            if (e.targetId && !this.targetOptions(e).some((o) => o.id === e.targetId)) e.targetId = '';
-        },
 
         statusChip (item) {
             const st = this.status(item);
@@ -292,44 +282,114 @@ function inboxView () {
 
         // ---------------------------------------------------------- actions
 
-        /** Publish or merge, depending on the draft's target selection. */
-        async publishItem (item) {
+        // --------------------------------------------------------- add flow
+
+        startAdd (item) {
+            if (this.frozen || this.offline) return;
+            const e = this.edits[item.id];
+            if (e) e.editing = true;
+        },
+
+        cancelAdd (item) {
+            const e = this.edits[item.id];
+            if (e) e.editing = false;
+        },
+
+        /** Confirm an Add: materialize the draft as a new row in the chosen group. */
+        async confirmAdd (item) {
             if (this.offline || this.frozen || this.busy) return;
             const e = this.edits[item.id];
             if (!e) return;
             const amount = FinEngine.num(e.amount);
-            let field, action, prev = null;
-            if (e.targetId) {
-                prev = FinImporter.mergeInto(this.month, item, e.targetId, { amount });
-                if (!prev) { showToast('That row no longer exists - pick another.', 'error'); e.targetId = ''; return; }
-                field = FinEngine.findField(this.month, e.targetId);
-                action = 'merged';
-            } else {
-                field = FinImporter.publish(this.month, item, { groupId: e.groupId, label: (e.label || '').trim() || item.label, amount });
-                if (!field) { showToast('No expense group to publish into.', 'error'); return; }
-                action = 'published';
-            }
-            const ops = [{ op: 'patchItem', id: item.id, set: { status: 'pending', monthKey: this.key, fieldId: field.id, action, prev } }];
+            const field = FinImporter.publish(this.month, item, { groupId: e.groupId, label: (e.label || '').trim() || item.label, amount });
+            if (!field) { showToast('No group to publish into.', 'error'); return; }
+            const ops = [{ op: 'patchItem', id: item.id, set: { status: 'pending', monthKey: this.key, fieldId: field.id, action: 'published', prev: null } }];
             // learn the destination: next month's arrival comes pre-selected
             const match = FinImporter.normalizeMerchant(item.label);
             if (match) {
-                ops.push({
-                    op: 'saveRule',
-                    rule: {
-                        accountId: item.accountId, match,
-                        action: action === 'merged' ? 'merge' : 'publish',
-                        groupId: e.groupId || null,
-                        target: action === 'merged' ? (field.label || null) : null,
-                    },
+                ops.push({ op: 'saveRule', rule: { accountId: item.accountId, match, action: 'publish', groupId: e.groupId || null, target: null } });
+            }
+            const res = await this.apply(ops, () => FinImporter.revert(this.month, { ...item, fieldId: field.id, action: 'published' }));
+            if (!res) return;
+            e.editing = false;
+            this.finish(item, `Added to ${this.groupTitle(e.groupId) || 'the month'} - press “Update This Month” to save it`);
+        },
+
+        // ------------------------------------------------------- merge flow
+
+        /**
+         * Merge picks its target on the MONTH itself: the modal steps aside,
+         * the month view enters pick mode (overlay per eligible row - see
+         * monthView/index.html), and the chosen row completes the merge. The
+         * modal then returns exactly as it was - same tab, same scroll.
+         */
+        startMergePick (item) {
+            if (this.frozen || this.offline || this.busy) return;
+            // a learned merge rule (or a loose name/amount match) pre-highlights
+            // its row in pick mode - the click on it is the one-click confirm
+            const e = this.edits[item.id] || {};
+            let suggestedId = null;
+            const rule = FinImporter.findRule(this.imports, item.accountId, item.label);
+            if (rule && rule.action === 'merge' && rule.target) {
+                const g = this.month.groups.find((x) => x.groupId === rule.groupId);
+                const t = g && g.fields.find((f) => f.label === rule.target && !f.importId);
+                if (t) suggestedId = t.id;
+            }
+            if (!suggestedId) {
+                const s = FinImporter.suggestTarget(this.month, e.groupId, item);
+                if (s) suggestedId = s.id;
+            }
+            this._pickScroll = this.$refs.reviewList ? this.$refs.reviewList.scrollTop : 0;
+            this.ui.mergePick = { itemId: item.id, label: item.label, amount: item.amount, suggestedId };
+            this.ui.modals.inbox = false;
+            if (suggestedId) {
+                this.$nextTick(() => {
+                    const el = document.querySelector(`[data-field-id="${suggestedId}"]`);
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 });
             }
-            const res = await this.apply(ops, () => FinImporter.revert(this.month, { ...item, fieldId: field.id, action, prev }));
-            if (!res) return;
-            delete this.edits[item.id];
-            showToast(action === 'merged'
-                ? `Merged into “${field.label || 'row'}” - Update This Month to save it`
-                : 'Row added - Update This Month to save it', 'success', 5000);
         },
+
+        /** The month view's pick overlay chose a row. */
+        async completeMergePick (fieldId) {
+            const pick = this.ui.mergePick;
+            if (!pick || this.busy) return;
+            const item = this.items.find((i) => i.id === pick.itemId);
+            const field = item && FinEngine.findField(this.month, fieldId);
+            const group = field && FinEngine.groupOfField(this.month, fieldId);
+            if (!field || !group || field.importId) return;
+            const e = this.edits[item.id] || {};
+            const amount = FinEngine.num(e.amount !== undefined ? e.amount : item.amount);
+            const prev = FinImporter.mergeInto(this.month, item, fieldId, { amount });
+            const ops = [
+                { op: 'patchItem', id: item.id, set: { status: 'pending', monthKey: this.key, fieldId, action: 'merged', prev } },
+            ];
+            const match = FinImporter.normalizeMerchant(item.label);
+            if (match) {
+                ops.push({ op: 'saveRule', rule: { accountId: item.accountId, match, action: 'merge', groupId: group.groupId, target: field.label || null } });
+            }
+            this.ui.mergePick = null;
+            const res = await this.apply(ops, () => FinImporter.revert(this.month, { ...item, fieldId, action: 'merged', prev }));
+            this.reopenAfterPick();
+            if (!res) return;
+            this.finish(item, `Merged into “${field.label || 'unnamed'}” - press “Update This Month” to save it`);
+        },
+
+        cancelMergePick () {
+            this.ui.mergePick = null;
+            this.reopenAfterPick();
+        },
+
+        /** The modal returns in the exact state it left: tab and scroll intact. */
+        reopenAfterPick () {
+            const top = this._pickScroll || 0;
+            this.ui.modals.inbox = true;
+            this.$nextTick(() => {
+                if (this.$refs.reviewList) this.$refs.reviewList.scrollTop = top;
+            });
+        },
+
+        // ---------------------------------------------------------- dismiss
 
         async dismissItem (item) {
             if (this.offline || this.busy) return;
@@ -341,8 +401,7 @@ function inboxView () {
             }
             const res = await this.apply(ops);
             if (!res) return;
-            delete this.edits[item.id];
-            showToast(e && e.always ? 'Dismissed - future matches arrive pre-dismissed' : 'Dismissed', 'info', 2500);
+            this.finish(item, e && e.always ? 'Dismissed - future matches arrive pre-dismissed' : 'Dismissed');
         },
 
         /** Dismissed → back to the drafts. */

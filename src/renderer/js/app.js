@@ -30,6 +30,11 @@ document.addEventListener('alpine:init', () => {
         monthGoto: null, // set by monthView: header picker → goto(key)
         revealField: null, // set by monthView: search hit → collapse-others + scroll + blink
         inboxReveal: null, // item id: a row's imported badge → inbox modal scrolls to + blinks it
+        // merge-pick mode: the inbox modal steps aside and the month view
+        // picks the target row ({ itemId, label, amount, suggestedId })
+        mergePick: null,
+        mergePickChoose: null, // set by inboxView: (fieldId) → complete the merge
+        mergePickCancel: null, // set by inboxView: () → abandon, reopen modal
         recomputeChanges: [],
         importSummary: null,
         importMap: { folder: '', groups: [] },

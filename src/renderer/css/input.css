@@ -52,6 +52,20 @@
     animation: row-blink 0.7s ease 3;
 }
 
+/* import inbox: a handled draft shows its done-message, then folds away.
+   The delay keeps the message readable; forwards holds the collapsed end
+   state until the row unmounts (inbox.js finish()). */
+@keyframes import-leave {
+    0% { opacity: 1; max-height: 6rem; }
+    45% { opacity: 1; max-height: 6rem; }
+    100% { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; border-color: transparent; }
+}
+.import-leave {
+    overflow: hidden;
+    pointer-events: none;
+    animation: import-leave 1.35s ease forwards;
+}
+
 /* Only the fields are meant to be selectable — dragging across a row or
    double-clicking a button shouldn't highlight the app's own words. Editable
    controls opt back in; so does anything worth copying, via `select-text`

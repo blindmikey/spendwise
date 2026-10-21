@@ -311,6 +311,24 @@
             @db-refreshed.window="refreshRateCache(); resetHistory(); renderChart()"
             @resize.window.debounce.500ms="renderChart()">
 
+            <!-- merge-pick mode (bank imports): the inbox modal stepped aside;
+                 the banner instructs, eligible rows get a click overlay below,
+                 everything else dims. Esc or Cancel abandons. -->
+            <template x-if="$store.ui.mergePick">
+                <div class="fixed top-16 inset-x-0 z-40 flex justify-center px-4 pointer-events-none"
+                    @keydown.escape.window="$store.ui.mergePickCancel && $store.ui.mergePickCancel()">
+                    <div class="pointer-events-auto flex items-center gap-3 bg-white dark:bg-zinc-100 border border-emerald-400 rounded-full shadow-lg pl-4 pr-2 py-2 max-w-full">
+                        <span class="text-sm text-zinc-700 truncate">
+                            Pick the row to merge
+                            <span class="font-semibold" x-text="'“' + $store.ui.mergePick.label + '”'"></span>
+                            <span class="text-zinc-400" x-text="'(' + fmtExact($store.ui.mergePick.amount) + ')'"></span> into
+                        </span>
+                        <button type="button" @click="$store.ui.mergePickCancel && $store.ui.mergePickCancel()"
+                            class="shrink-0 text-[11px] font-bold uppercase tracking-widest border border-zinc-300 hover:border-zinc-500 text-zinc-500 rounded-full px-3 py-1.5 cursor-pointer transition-colors">Cancel</button>
+                    </div>
+                </div>
+            </template>
+
             <template x-if="month">
                 <div>
                     <div class="flex flex-col xl:flex-row gap-6 items-start">
@@ -367,7 +385,18 @@
                                                      @focusin (it bubbles, unlike focus) closes an editor left open on
                                                      another row. The editors' own controls live inside this wrapper,
                                                      so using them keeps focus in-row and the editor stays put. -->
-                                                <div class="mb-2.5 max-sm:mb-5" :data-field-id="field.id" @focusin="rowFocused(field)">
+                                                <div class="mb-2.5 max-sm:mb-5 relative" :data-field-id="field.id" @focusin="rowFocused(field)"
+                                                    :class="$store.ui.mergePick && !mergeEligible(group, field) && 'opacity-30 pointer-events-none'">
+                                                    <!-- merge-pick overlay: the whole row is the click target;
+                                                         the remembered/suggested row arrives pre-highlighted -->
+                                                    <template x-if="$store.ui.mergePick && mergeEligible(group, field)">
+                                                        <button type="button" @click="$store.ui.mergePickChoose && $store.ui.mergePickChoose(field.id)"
+                                                            :title="'Merge into “' + (field.label || 'unnamed') + '”'"
+                                                            class="absolute -inset-1 z-10 rounded-md cursor-pointer ring-2 transition-colors"
+                                                            :class="$store.ui.mergePick.suggestedId === field.id
+                                                                ? 'ring-emerald-500 bg-emerald-500/15 hover:bg-emerald-500/25'
+                                                                : 'ring-emerald-400/40 hover:ring-emerald-500 hover:bg-emerald-500/10'"></button>
+                                                    </template>
                                                         <!-- phones: rows wrap into [pin][label][value][paid][⋮] on line 1,
                                                          then spent/available/target/link on line 2 (max-sm
                                                          order utilities); desktop keeps the single DOM-order row -->
@@ -1511,65 +1540,83 @@
                         </div>
 
                         <!-- ------------------------ to review -->
-                        <div x-show="tab === 'review'" class="max-h-[55vh] overflow-y-auto pr-1">
+                        <div x-show="tab === 'review'" x-ref="reviewList" class="max-h-[55vh] overflow-y-auto overflow-x-hidden pr-1">
                             <p x-show="frozen && pendingItems.length" class="text-xs text-amber-600 dark:text-amber-400 mb-2">
                                 This month is closed - unlock it to publish drafts. Dismissing still works.</p>
                             <template x-for="item in pendingItems" :key="item.id">
                                 <template x-if="edits[item.id]">
-                                    <div class="border-t border-zinc-100 py-3" :data-import-item="item.id">
-                                        <!-- one line at desktop width (the modal is 5xl for exactly
-                                             this); flex-wrap flows it onto more lines on phones -->
-                                        <div class="flex items-center gap-1.5 flex-wrap">
-                                            <span class="w-10 shrink-0 text-[11px] text-zinc-400 tabular-nums select-none" x-text="dateLabel(item)"></span>
-                                            <input type="text" x-model="edits[item.id].label" :disabled="frozen" placeholder="Label"
-                                                class="flex-1 min-w-40 border border-zinc-200 rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white dark:text-[#c7e0da] dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                                            <div class="relative shrink-0">
-                                                <span class="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 text-xs select-none">$</span>
-                                                <!-- x-model WITHOUT .number: the amount stays the exact
-                                                     string ("4.50") - .number would round-trip the float
-                                                     and strip the trailing zero -->
-                                                <input type="number" step="0.01" x-model="edits[item.id].amount" :disabled="frozen" @paste="keepPastedText($event)"
-                                                    class="w-24 border border-zinc-200 rounded pl-5 pr-1 py-1.5 text-sm dark:text-[#c7e0da] text-right bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                    <div class="border-t border-zinc-100 py-2.5" :data-import-item="item.id"
+                                        :class="leaving[item.id] && 'import-leave'">
+
+                                        <!-- done: the completion message plays in place, then the row leaves -->
+                                        <template x-if="leaving[item.id]">
+                                            <div class="flex items-center gap-2 py-1 text-sm text-emerald-700 dark:text-emerald-400">
+                                                <svg class="w-4 h-4 shrink-0"><use href="#i-check"/></svg>
+                                                <span class="truncate" x-text="leaving[item.id]"></span>
                                             </div>
-                                            <span class="text-[11px] text-zinc-400 select-none">to</span>
-                                            <!-- no x-model on these selects: its initial write lands
-                                                 before the x-for options mount (and marks the select
-                                                 dirty, so a later `selected` attribute is ignored).
-                                                 x-effect reads the value and the option SOURCE
-                                                 synchronously (tracking both), then assigns after the
-                                                 options have flushed - pre-selected suggestions and
-                                                 programmatic resets both display correctly. -->
-                                            <select @change="edits[item.id].groupId = $event.target.value; groupChanged(edits[item.id])" :disabled="frozen"
-                                                x-effect="const v = edits[item.id].groupId; destGroups(edits[item.id]); $nextTick(() => { $el.value = v })"
-                                                class="text-xs border border-zinc-200 rounded py-1.5 px-1 bg-white dark:bg-zinc-100 cursor-pointer max-w-36 focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                                                <template x-for="g in destGroups(edits[item.id])" :key="g.groupId">
-                                                    <option :value="g.groupId" x-text="g.title"></option>
-                                                </template>
-                                            </select>
-                                            <select @change="edits[item.id].targetId = $event.target.value" :disabled="frozen"
-                                                x-effect="const v = edits[item.id].targetId; targetOptions(edits[item.id]); $nextTick(() => { $el.value = v })"
-                                                :title="edits[item.id].targetId ? 'Fills this existing row with the bank\'s amount' : 'Creates a new row in the group'"
-                                                class="text-xs border border-zinc-200 rounded py-1.5 px-1 bg-white dark:bg-zinc-100 cursor-pointer max-w-44 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                                                :class="edits[item.id].targetId && 'text-violet-700 dark:text-violet-400 font-semibold'">
-                                                <option value="">— as a new row —</option>
-                                                <template x-for="o in targetOptions(edits[item.id])" :key="o.id">
-                                                    <option :value="o.id" x-text="'merge into: ' + o.label"></option>
-                                                </template>
-                                            </select>
-                                            <label class="flex items-center gap-1 text-[11px] text-zinc-400 cursor-pointer select-none shrink-0"
-                                                title="Always dismiss this merchant - future imports matching it arrive pre-dismissed (undo under Rules)">
-                                                <input type="checkbox" x-model="edits[item.id].always" class="accent-zinc-500">always
-                                            </label>
-                                            <button type="button" @click="dismissItem(item)" :disabled="offline || busy"
-                                                title="Ignore this transaction - it moves to Processed and can be restored"
-                                                class="shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-3 py-1.5 cursor-pointer transition-colors border border-zinc-200 text-zinc-500 hover:border-red-400 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-40">Dismiss</button>
-                                            <button type="button" @click="publishItem(item)" :disabled="frozen || offline || busy"
-                                                class="shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-3.5 py-1.5 cursor-pointer transition-colors text-white disabled:bg-zinc-200 disabled:text-zinc-400"
-                                                :class="edits[item.id].targetId ? 'bg-violet-600 hover:bg-violet-500' : 'bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-400/70 dark:text-[#1b1e25]'"
-                                                x-text="edits[item.id].targetId ? 'Merge' : 'Add'"></button>
-                                        </div>
-                                        <div class="pl-10 mt-1 text-[11px] text-zinc-400 truncate select-none"
-                                            x-text="accountLabel(item.accountId) + ' · ' + item.label + ' · ' + fmtExact(item.amount)"></div>
+                                        </template>
+
+                                        <!-- read-only (the default): uniform fixed-width columns; the
+                                             date lives in the prefilled label, no separate column -->
+                                        <template x-if="!leaving[item.id] && !edits[item.id].editing">
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <span class="flex-1 min-w-40 truncate text-sm text-zinc-700 dark:text-[#c7e0da]" x-text="edits[item.id].label"></span>
+                                                <span class="shrink-0 max-w-40 truncate text-[11px] text-zinc-400 select-none" x-text="accountLabel(item.accountId)"></span>
+                                                <span class="w-24 shrink-0 text-right text-sm font-semibold tabular-nums"
+                                                    :class="item.amount < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-700 dark:text-[#c7e0da]'"
+                                                    x-text="fmtExact(item.amount)"></span>
+                                                <label class="flex items-center gap-1 text-[11px] text-zinc-400 cursor-pointer select-none shrink-0"
+                                                    title="Always dismiss this merchant - future imports matching it arrive pre-dismissed (undo under Rules)">
+                                                    <input type="checkbox" x-model="edits[item.id].always" class="accent-zinc-500">always
+                                                </label>
+                                                <button type="button" @click="dismissItem(item)" :disabled="offline || busy"
+                                                    title="Ignore this transaction - it moves to Processed and can be restored"
+                                                    class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors border border-zinc-200 text-zinc-500 hover:border-red-400 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-40">Dismiss</button>
+                                                <button type="button" @click="startMergePick(item)" :disabled="frozen || offline || busy"
+                                                    title="Fill an existing row of this month with this amount - pick the row on the month itself"
+                                                    class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors border border-violet-300 dark:border-violet-500/40 text-violet-700 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/10 disabled:opacity-40 disabled:hover:bg-transparent">Merge</button>
+                                                <button type="button" @click="startAdd(item)" :disabled="frozen || offline || busy"
+                                                    title="Add as a new row - review the label, amount, and group first"
+                                                    class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors text-white bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-400/70 dark:text-[#1b1e25] disabled:bg-zinc-200 disabled:text-zinc-400">Add</button>
+                                            </div>
+                                        </template>
+
+                                        <!-- editing (after Add): label, amount, and group open up -->
+                                        <template x-if="!leaving[item.id] && edits[item.id].editing">
+                                            <div>
+                                                <div class="flex items-center gap-2 flex-wrap">
+                                                    <input type="text" x-model="edits[item.id].label" :disabled="frozen" placeholder="Label"
+                                                        class="flex-1 min-w-40 border border-zinc-200 rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white dark:text-[#c7e0da] dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                                    <div class="relative shrink-0">
+                                                        <span class="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 text-xs select-none">$</span>
+                                                        <!-- x-model WITHOUT .number: the amount stays the exact
+                                                             string ("4.50") - .number would round-trip the float
+                                                             and strip the trailing zero -->
+                                                        <input type="number" step="0.01" x-model="edits[item.id].amount" :disabled="frozen" @paste="keepPastedText($event)"
+                                                            class="w-24 border border-zinc-200 rounded pl-5 pr-1 py-1.5 text-sm dark:text-[#c7e0da] text-right bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                                    </div>
+                                                    <span class="text-[11px] text-zinc-400 select-none">to</span>
+                                                    <!-- no x-model on the select: its initial write lands before
+                                                         the x-for options mount (and marks the select dirty, so a
+                                                         later `selected` attribute is ignored). x-effect reads the
+                                                         value and the option SOURCE synchronously (tracking both),
+                                                         then assigns after the options have flushed. -->
+                                                    <select @change="edits[item.id].groupId = $event.target.value" :disabled="frozen"
+                                                        x-effect="const v = edits[item.id].groupId; destGroups(edits[item.id]); $nextTick(() => { $el.value = v })"
+                                                        class="w-40 shrink-0 text-xs border border-zinc-200 rounded py-1.5 px-1 bg-white dark:bg-zinc-100 cursor-pointer focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                                        <template x-for="g in destGroups(edits[item.id])" :key="g.groupId">
+                                                            <option :value="g.groupId" x-text="g.title"></option>
+                                                        </template>
+                                                    </select>
+                                                    <button type="button" @click="cancelAdd(item)"
+                                                        class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors border border-zinc-200 text-zinc-500 hover:border-zinc-400 hover:text-zinc-700">Cancel</button>
+                                                    <button type="button" @click="confirmAdd(item)" :disabled="frozen || offline || busy"
+                                                        class="w-20 shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-2 py-1.5 cursor-pointer transition-colors text-white bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-400/70 dark:text-[#1b1e25] disabled:bg-zinc-200 disabled:text-zinc-400">Confirm</button>
+                                                </div>
+                                                <div class="mt-1 text-[11px] text-zinc-400 truncate select-none"
+                                                    x-text="'Bank line: ' + accountLabel(item.accountId) + ' · ' + item.label + ' · ' + fmtExact(item.amount)"></div>
+                                            </div>
+                                        </template>
                                     </div>
                                 </template>
                             </template>
@@ -1591,7 +1638,7 @@
                         </div>
 
                         <!-- ------------------------ processed -->
-                        <div x-show="tab === 'processed'" class="max-h-[55vh] overflow-y-auto pr-1">
+                        <div x-show="tab === 'processed'" class="max-h-[55vh] overflow-y-auto overflow-x-hidden pr-1">
                             <template x-for="item in processedItems" :key="item.id">
                                 <div class="border-t border-zinc-100 py-2 flex items-center gap-2" :data-import-item="item.id">
                                     <span class="shrink-0 text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded-full select-none"
@@ -1619,7 +1666,7 @@
                         </div>
 
                         <!-- ------------------------ rules & accounts -->
-                        <div x-show="tab === 'rules'" class="max-h-[55vh] overflow-y-auto pr-1">
+                        <div x-show="tab === 'rules'" class="max-h-[55vh] overflow-y-auto overflow-x-hidden pr-1">
                             <!-- connection management lives in Settings → Bank sync;
                                  here just enough status to know where to look -->
                             <p class="text-[11px] text-zinc-400 mb-2 flex items-center gap-1.5">

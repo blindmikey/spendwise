@@ -327,6 +327,11 @@ function monthView () {
             this.ui.inboxReveal = field.importId;
             this.ui.modals.inbox = true;
         },
+        /** Merge-pick mode: rows a bank draft may merge into - income/expense
+            rows not already holding an imported line. */
+        mergeEligible (group, field) {
+            return (group.kind === 'expense' || group.kind === 'income') && !field.importId;
+        },
         contrib (group, field) { return FinEngine.contribution(this.month, field, group.kind); },
         isAuto (field) { return FinEngine.hasAuto(field); },
         isSched (group, field) { return group.kind === 'goal' && !!field.dueKey && FinEngine.num(field.target) > 0; },
