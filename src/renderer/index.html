@@ -471,7 +471,14 @@
                                                                 <!-- spinner steps whole dollars everywhere; cents can
                                                                      still be TYPED on income/expense rows. Group totals
                                                                      round the cents away (income down, spending up). -->
+                                                                <!-- cents-exact display: a float drops its trailing zero
+                                                                     (an imported 4.50 would read 4.5), so whenever the
+                                                                     value carries cents, upgrade what the box SHOWS to two
+                                                                     decimals - never while it has focus (typing wins), and
+                                                                     only when the shown text parses to the same number -->
                                                                 <input type="number" x-model.number="field.value" :disabled="frozen" step="1" @paste="keepPastedText($event)"
+                                                                    x-effect="const v = field.value; if (typeof v === 'number' && v % 1 && document.activeElement !== $el) $nextTick(() => { if (Number($el.value) === v) $el.value = v.toFixed(2) })"
+                                                                    @blur="const v = FinEngine.num(field.value); if (v % 1) $el.value = v.toFixed(2)"
                                                                     :title="group.kind === 'expense' && field.budgetId && !FinEngine.num(field.value)
                                                                         ? 'Linked to an envelope but $0 - it draws nothing until an amount is entered'
                                                                         : (group.kind === 'envelope' || group.kind === 'goal' ? 'Monthly allotment' : 'Amount')"
