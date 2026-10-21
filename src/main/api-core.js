@@ -20,6 +20,7 @@ import { importLegacy } from './migrate.js';
 import { openDb } from './db-open.js';
 import { hashPassword, verifyPassword } from './auth.js';
 import { createUpdateChecker, RELEASES_URL } from './update-check.js';
+import { parseSetupInput, claimAccessUrl, fetchAccounts, toLedgerBatches } from './simplefin.js';
 
 const E = globalThis.FinEngine;
 const I = globalThis.FinImporter;
@@ -40,7 +41,16 @@ export function createCore (ctx) {
         await ctx.db.write(); // lowdb/steno writes temp-file-then-rename (atomic)
     }
 
-    const snapshot = () => ({ data: E.clone(ctx.db.data), path: ctx.dbPath, version: ctx.version || '' });
+    // The SimpleFIN access URL is a bank credential: like settings.auth, it
+    // never leaves this process. Everything the transports hand out - full
+    // snapshots and imports clones alike - goes through a strip first.
+    const stripImports = (imports) => { if (imports) delete imports.simplefin; return imports; };
+    const snapshot = () => {
+        const data = E.clone(ctx.db.data);
+        stripImports(data.imports);
+        return { data, path: ctx.dbPath, version: ctx.version || '' };
+    };
+    const importsClone = () => stripImports(E.clone(ctx.db.data.imports));
 
     return {
         async loadDb () {
@@ -189,7 +199,81 @@ export function createCore (ctx) {
             I.ensureImports(ctx.db.data);
             const res = I.applyOps(ctx.db.data, ops || []);
             await persist();
-            return { rev: ctx.db.data.meta.rev, imports: E.clone(ctx.db.data.imports), ...res };
+            return { rev: ctx.db.data.meta.rev, imports: importsClone(), ...res };
+        },
+
+        // ------------------------------------------------- SimpleFIN sync
+
+        simplefinStatus () {
+            const sf = ctx.db.data.imports && ctx.db.data.imports.simplefin;
+            return { connected: !!(sf && sf.accessUrl), lastSync: (sf && sf.lastSync) || null };
+        },
+
+        /**
+         * Connect: resolve whatever was pasted (setup token / claim URL /
+         * access URL), claim if needed, verify the credentials with a probe,
+         * then store the access URL. The token never echoes back out.
+         */
+        async simplefinSetup ({ token }) {
+            const parsed = parseSetupInput(token);
+            const accessUrl = parsed.kind === 'access'
+                ? parsed.url
+                : await claimAccessUrl(parsed.url, ctx.fetchImpl);
+            // probe before storing - a bad paste fails here, not at first sync
+            await fetchAccounts(accessUrl, {
+                startDate: Math.floor(Date.now() / 1000) - 86400,
+                fetchImpl: ctx.fetchImpl,
+            });
+            I.ensureImports(ctx.db.data);
+            ctx.db.data.imports.simplefin = { accessUrl, lastSync: null };
+            await persist();
+            return { connected: true };
+        },
+
+        async simplefinDisconnect () {
+            I.ensureImports(ctx.db.data);
+            delete ctx.db.data.imports.simplefin;
+            await persist();
+            return { connected: false };
+        },
+
+        /**
+         * Pull the last `days` (default 30, capped 90) of posted transactions
+         * into the ledger. Each SimpleFIN account binds to an imports account
+         * by its sfin id (created on first sight, default group = the first
+         * expense group; relabel/remap under Rules). Dedupe rides the bank's
+         * own transaction ids, so re-syncing is always safe.
+         */
+        async simplefinSync ({ days } = {}) {
+            const sf = ctx.db.data.imports && ctx.db.data.imports.simplefin;
+            if (!sf || !sf.accessUrl) throw new Error('Not connected to SimpleFIN - add a setup token first.');
+            const span = Math.max(1, Math.min(90, E.num(days) || 30));
+            const data = await fetchAccounts(sf.accessUrl, {
+                startDate: Math.floor(Date.now() / 1000) - span * 86400,
+                fetchImpl: ctx.fetchImpl,
+            });
+            I.ensureImports(ctx.db.data);
+            const imports = ctx.db.data.imports;
+            const fallbackGroup = E.sortedDefs(ctx.db.data.settings).find((g) => g.kind === E.KIND.EXPENSE);
+            const ops = [];
+            for (const batch of toLedgerBatches(data.accounts)) {
+                let acct = imports.accounts.find((a) => a.sfin === batch.sfinId);
+                if (!acct) {
+                    acct = { id: E.uuid(), label: batch.label, groupId: (fallbackGroup && fallbackGroup.id) || null, sfin: batch.sfinId };
+                    ops.push({ op: 'saveAccount', account: acct });
+                }
+                if (batch.items.length) ops.push({ op: 'addItems', accountId: acct.id, items: batch.items });
+            }
+            const res = I.applyOps(ctx.db.data, ops);
+            imports.simplefin.lastSync = new Date().toISOString();
+            await persist();
+            return {
+                rev: ctx.db.data.meta.rev,
+                imports: importsClone(),
+                ...res,
+                accounts: (data.accounts || []).length,
+                warnings: Array.isArray(data.errors) ? data.errors : [],
+            };
         },
 
         // Tag add/remove applies to the field across ALL months. No rev gate:

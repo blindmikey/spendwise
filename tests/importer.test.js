@@ -174,6 +174,32 @@ describe('applyOps', () => {
         expect(res.added).toBe(1);
     });
 
+    it('content-dedupes re-issued bank ids, credit-counted per account', () => {
+        // first sync: two genuinely identical coffees (distinct bank ids)
+        add([
+            { fp: 'sf:a1', date: '2026-10-03', label: 'COFFEE', amount: 4.5 },
+            { fp: 'sf:a2', date: '2026-10-03', label: 'COFFEE', amount: 4.5 },
+        ]);
+        expect(db.imports.items).toHaveLength(2);
+        // re-sync where the bank re-issued every id: both consumed by credits
+        const res = add([
+            { fp: 'sf:b1', date: '2026-10-03', label: 'COFFEE', amount: 4.5 },
+            { fp: 'sf:b2', date: '2026-10-03', label: 'COFFEE', amount: 4.5 },
+        ]);
+        expect(res).toMatchObject({ added: 0, skipped: 2 });
+        // syncs carry the whole overlapping window: a genuine THIRD identical
+        // purchase arrives alongside (re-issued) copies of the first two,
+        // which consume the credits - the third exceeds them and lands
+        expect(add([
+            { fp: 'sf:c1', date: '2026-10-03', label: 'COFFEE', amount: 4.5 },
+            { fp: 'sf:c2', date: '2026-10-03', label: 'COFFEE', amount: 4.5 },
+            { fp: 'sf:c3', date: '2026-10-03', label: 'COFFEE', amount: 4.5 },
+        ])).toMatchObject({ added: 1, skipped: 2 });
+        // same content under another account is untouched by these credits
+        const other = I.applyOps(db, [{ op: 'addItems', accountId: 'acct-2', items: [{ fp: 'sf:a1', date: '2026-10-03', label: 'COFFEE', amount: 4.5 }] }]);
+        expect(other.added).toBe(1);
+    });
+
     it('pre-dismisses arrivals matching a standing dismiss rule', () => {
         I.applyOps(db, [{ op: 'saveRule', rule: { accountId: 'acct-1', match: 'AUTOPAY CHASE VISA', action: 'dismiss' } }]);
         add([{ fp: 'x', label: 'AUTOPAY CHASE VISA 4821', amount: 900 }]);

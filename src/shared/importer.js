@@ -249,11 +249,25 @@
             if (!op || typeof op !== 'object') continue;
             switch (op.op) {
                 case 'addItems': {
-                    const have = new Set(imports.items
-                        .filter((i) => i.accountId === op.accountId)
-                        .map((i) => i.fp));
+                    const mine = imports.items.filter((i) => i.accountId === op.accountId);
+                    const have = new Set(mine.map((i) => i.fp));
+                    // second line of defense behind the fingerprint: some banks
+                    // re-issue transaction ids between syncs, which would slip
+                    // every line past an id-based fingerprint. Each EXISTING
+                    // item grants one content credit (date|amount|label); an
+                    // incoming item with an unseen fp consumes a credit instead
+                    // of duplicating. Credit-counted, not keyed-once, so two
+                    // genuine identical coffees still both import.
+                    const contentKey = (x) => `${x.date || x.dateRaw || ''}|${num(x.amount).toFixed(2)}|${String(x.label || '').trim().toLowerCase()}`;
+                    const credits = {};
+                    for (const i of mine) {
+                        const k = contentKey(i);
+                        credits[k] = (credits[k] || 0) + 1;
+                    }
                     for (const t of op.items || []) {
                         if (!t || !t.fp || have.has(t.fp)) { skipped += 1; continue; }
+                        const ck = contentKey(t);
+                        if (credits[ck] > 0) { credits[ck] -= 1; skipped += 1; continue; }
                         have.add(t.fp);
                         const item = {
                             id: E().uuid(),
@@ -293,8 +307,16 @@
                 case 'saveAccount': {
                     const a = op.account || {};
                     const existing = a.id && imports.accounts.find((x) => x.id === a.id);
-                    if (existing) Object.assign(existing, { label: String(a.label || ''), groupId: a.groupId || null });
-                    else imports.accounts.push({ id: a.id || E().uuid(), label: String(a.label || ''), groupId: a.groupId || null });
+                    if (existing) {
+                        Object.assign(existing, { label: String(a.label || ''), groupId: a.groupId || null });
+                        // sfin (the SimpleFIN account binding) only changes when
+                        // explicitly sent - a rename from the UI must not sever it
+                        if (a.sfin !== undefined) existing.sfin = a.sfin;
+                    } else {
+                        const fresh = { id: a.id || E().uuid(), label: String(a.label || ''), groupId: a.groupId || null };
+                        if (a.sfin !== undefined) fresh.sfin = a.sfin;
+                        imports.accounts.push(fresh);
+                    }
                     break;
                 }
                 case 'deleteAccount':

@@ -98,6 +98,10 @@ export async function registerIpc () {
     handle('db:saveSettings', async (p) => ok(await active().saveSettings(p)));
     handle('db:apply-tags', async (p) => ok(await active().applyTagsEverywhere(p)));
     handle('db:imports-apply', async (p) => ok(await active().importsApply(p)));
+    handle('db:simplefin-status', async () => ok(await active().simplefinStatus()));
+    handle('db:simplefin-setup', async (p) => ok(await active().simplefinSetup(p)));
+    handle('db:simplefin-sync', async (p) => ok(await active().simplefinSync(p)));
+    handle('db:simplefin-disconnect', async () => ok(await active().simplefinDisconnect()));
     handle('backups:list', async () => ok(await active().listBackups()));
     handle('backups:restore', async (p) => ok(await active().restoreBackup(p)));
     handle('update:check', async (p) => ok(await active().checkUpdate(p)));
@@ -256,7 +260,11 @@ export async function registerIpc () {
             defaultPath: path.join(path.dirname(ctx.dbPath), 'db.json'),
             filters: [{ name: 'JSON', extensions: ['json'] }],
         });
-        const snapshot = () => ({ data: E.clone(ctx.db.data), path: ctx.dbPath });
+        const snapshot = () => {
+            const data = E.clone(ctx.db.data);
+            if (data.imports) delete data.imports.simplefin; // credential stays in-process (see api-core)
+            return { data, path: ctx.dbPath };
+        };
         if (res.canceled || !res.filePath) return ok(snapshot());
         const newPath = res.filePath;
         if (path.resolve(newPath) !== path.resolve(ctx.dbPath)) {

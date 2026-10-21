@@ -22,6 +22,9 @@ function inboxView () {
         csv: null,          // { fileName, rows, map, expensesNegative, accountId }
         newAcctLabel: '',   // inline account creation inside the import step
         busy: false,
+        // SimpleFIN live sync: the token goes straight to the backend and is
+        // never stored or echoed here; `connected` is all the renderer knows
+        sf: { loaded: false, connected: false, lastSync: null, busy: false, token: '' },
 
         // ------------------------------------------------------- accessors
 
@@ -67,6 +70,7 @@ function inboxView () {
                 this.csv = null;
                 this.tab = 'review';
                 this.prepareEdits();
+                this.loadSfStatus();
                 this.$nextTick(() => this.consumeReveal());
             });
             // a badge click while the modal is ALREADY open still reveals
@@ -342,6 +346,78 @@ function inboxView () {
         async removeRule (rule) {
             if (this.offline) return;
             await this.apply([{ op: 'deleteRule', id: rule.id }]);
+        },
+
+        // ---------------------------------------------------- SimpleFIN sync
+
+        async loadSfStatus () {
+            if (this.sf.loaded || !window.api.simplefinStatus) return;
+            try {
+                const res = unwrap(await window.api.simplefinStatus());
+                this.sf.connected = res.connected;
+                this.sf.lastSync = res.lastSync;
+                this.sf.loaded = true;
+            } catch { /* the panel just shows the connect form */ }
+        },
+
+        get sfLastSyncLabel () {
+            if (!this.sf.lastSync) return 'never synced';
+            try { return 'last sync ' + new Date(this.sf.lastSync).toLocaleString(); } catch { return ''; }
+        },
+
+        async connectSf () {
+            const token = this.sf.token.trim();
+            if (!token || this.sf.busy || this.offline) return;
+            this.sf.busy = true;
+            try {
+                unwrap(await window.api.simplefinSetup({ token }));
+                this.sf.token = '';
+                this.sf.connected = true;
+                showToast('Connected to SimpleFIN', 'success');
+                await this.syncSf();
+            } catch (e) {
+                showToast(e.message, 'error', 9000);
+            } finally {
+                this.sf.busy = false;
+            }
+        },
+
+        async syncSf () {
+            if (!this.sf.connected || this.offline) return;
+            this.sf.busy = true;
+            try {
+                const res = unwrap(await window.api.simplefinSync({}));
+                this.db.imports = res.imports;
+                this.db.meta.rev = res.rev;
+                this.sf.lastSync = new Date().toISOString();
+                this.tab = 'review';
+                this.prepareEdits();
+                showToast(`Synced ${res.accounts} account${res.accounts === 1 ? '' : 's'}: `
+                    + `${res.added} new` + (res.skipped ? ` · ${res.skipped} already seen` : ''), 'success', 5000);
+                for (const w of res.warnings || []) showToast(String(w), 'error', 8000);
+            } catch (e) {
+                showToast(e.message, 'error', 9000);
+            } finally {
+                this.sf.busy = false;
+            }
+        },
+
+        async disconnectSf () {
+            const okOff = await confirmDialog({
+                title: 'Disconnect SimpleFIN?',
+                body: 'The stored access credential is deleted. Imported items, accounts, and rules all stay - '
+                    + 'reconnect anytime with a fresh setup token.',
+                confirmText: 'Disconnect',
+            });
+            if (!okOff) return;
+            try {
+                unwrap(await window.api.simplefinDisconnect());
+                this.sf.connected = false;
+                this.sf.lastSync = null;
+                showToast('SimpleFIN disconnected', 'info');
+            } catch (e) {
+                showToast(e.message, 'error', 7000);
+            }
         },
 
         // -------------------------------------------------------- CSV import

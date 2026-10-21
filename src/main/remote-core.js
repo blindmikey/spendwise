@@ -18,6 +18,7 @@ const METHODS = [
     'loadDb', 'rev', 'saveMonth', 'saveClosedMonth', 'closeMonth',
     'saveSettings', 'applyTagsEverywhere', 'importsApply', 'listBackups',
     'restoreBackup', 'checkUpdate', 'logout',
+    'simplefinStatus', 'simplefinSetup', 'simplefinSync', 'simplefinDisconnect',
 ];
 
 export function normalizeHost (host) {

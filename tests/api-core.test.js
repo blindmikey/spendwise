@@ -161,6 +161,74 @@ describe('api-core importsApply', () => {
     });
 });
 
+describe('api-core SimpleFIN', () => {
+    const sfFetch = (accounts) => async (url, opts = {}) => {
+        if ((opts.method || 'GET') === 'POST') return { ok: true, text: async () => 'https://a:b@host/simplefin' };
+        return { ok: true, status: 200, json: async () => ({ errors: [], accounts }) };
+    };
+    const demoAccounts = [{
+        id: 'ACT-1', name: 'Checking', org: { name: 'Demo Bank' },
+        transactions: [
+            { id: 't1', posted: 1760000000, amount: '-105.50', payee: 'Fish Shack' },
+            { id: 't2', posted: 1760086400, amount: '-35.50', payee: 'Grocer' },
+        ],
+    }];
+
+    it('setup claims + probes + stores; status reports; snapshots never leak the credential', async () => {
+        ctx.fetchImpl = sfFetch(demoAccounts);
+        core = createCore(ctx);
+        expect(core.simplefinStatus()).toEqual({ connected: false, lastSync: null });
+        const token = Buffer.from('https://host/simplefin/claim/abc').toString('base64');
+        const res = await core.simplefinSetup({ token });
+        expect(res.connected).toBe(true);
+        expect(ctx.db.data.imports.simplefin.accessUrl).toBe('https://a:b@host/simplefin');
+        expect(core.simplefinStatus().connected).toBe(true);
+        // the credential never leaves the process
+        const snap = await core.loadDb();
+        expect(snap.data.imports.simplefin).toBeUndefined();
+        const applied = await core.importsApply({ ops: [] });
+        expect(applied.imports.simplefin).toBeUndefined();
+    });
+
+    it('sync creates sfin-bound accounts, dedupes on re-sync, stamps lastSync', async () => {
+        ctx.fetchImpl = sfFetch(demoAccounts);
+        core = createCore(ctx);
+        await core.simplefinSetup({ token: 'https://a:b@host/simplefin' });
+        const first = await core.simplefinSync({});
+        expect(first.added).toBe(2);
+        expect(first.accounts).toBe(1);
+        const acct = ctx.db.data.imports.accounts[0];
+        expect(acct).toMatchObject({ label: 'Demo Bank Checking', groupId: 'g-exp', sfin: 'ACT-1' });
+        expect(ctx.db.data.imports.items.map((i) => i.fp)).toEqual(['sf:t1', 'sf:t2']);
+        expect(ctx.db.data.imports.simplefin.lastSync).toBeTruthy();
+        expect(first.imports.simplefin).toBeUndefined();
+
+        const again = await core.simplefinSync({});
+        expect(again.added).toBe(0);
+        expect(again.skipped).toBe(2);
+        expect(ctx.db.data.imports.accounts).toHaveLength(1); // no duplicate account either
+    });
+
+    it('a UI rename (no sfin in the op) keeps the binding', async () => {
+        ctx.fetchImpl = sfFetch(demoAccounts);
+        core = createCore(ctx);
+        await core.simplefinSetup({ token: 'https://a:b@host/simplefin' });
+        await core.simplefinSync({});
+        const acct = ctx.db.data.imports.accounts[0];
+        await core.importsApply({ ops: [{ op: 'saveAccount', account: { id: acct.id, label: 'Renamed', groupId: 'g-exp' } }] });
+        expect(ctx.db.data.imports.accounts[0]).toMatchObject({ label: 'Renamed', sfin: 'ACT-1' });
+    });
+
+    it('disconnect deletes the credential; sync without one refuses', async () => {
+        ctx.fetchImpl = sfFetch(demoAccounts);
+        core = createCore(ctx);
+        await core.simplefinSetup({ token: 'https://a:b@host/simplefin' });
+        await core.simplefinDisconnect();
+        expect(ctx.db.data.imports.simplefin).toBeUndefined();
+        await expect(core.simplefinSync({})).rejects.toThrow(/not connected/i);
+    });
+});
+
 describe('api-core app password', () => {
     it('set → verify → change requires current → remove', async () => {
         expect(core.authHas().hasPassword).toBe(false);

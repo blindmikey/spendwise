@@ -30,6 +30,7 @@ const WEB_METHODS = new Set([
     'loadDb', 'rev', 'saveMonth', 'saveClosedMonth', 'closeMonth',
     'saveSettings', 'applyTagsEverywhere', 'importsApply', 'listBackups',
     'restoreBackup', 'checkUpdate',
+    'simplefinStatus', 'simplefinSetup', 'simplefinSync', 'simplefinDisconnect',
 ]);
 
 const MIME = {
