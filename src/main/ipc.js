@@ -251,7 +251,14 @@ export async function registerIpc () {
             filters: [{ name: 'JSON', extensions: ['json'] }],
         });
         if (res.canceled || !res.filePath) return ok({ exported: null });
-        fs.copyFileSync(ctx.dbPath, res.filePath);
+        // an export is for sharing/moving the BOOKS - secrets stay home: the
+        // SimpleFIN access URL (a live read-only bank credential) and the app
+        // password hash never leave in a copy. Adopting an export elsewhere
+        // just means reconnecting / re-setting those.
+        const data = E.clone(ctx.db.data);
+        if (data.imports) delete data.imports.simplefin;
+        if (data.settings) delete data.settings.auth;
+        fs.writeFileSync(res.filePath, JSON.stringify(data, null, 2));
         return ok({ exported: res.filePath });
     });
 
