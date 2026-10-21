@@ -80,6 +80,20 @@ function inboxView () {
                 .filter((g) => g.kind === 'expense')
                 .map((g) => ({ groupId: g.groupId, title: g.title }));
         },
+        /**
+         * A draft's destination groups: expense groups always; income groups
+         * join for credits (negative amounts) - a payroll deposit publishes
+         * as a real income row. An income group already selected stays
+         * listed even if the amount is edited positive, so nothing dangles.
+         */
+        destGroups (e) {
+            if (!this.month) return [];
+            const credit = FinEngine.num(e.amount) < 0;
+            return this.month.groups
+                .filter((g) => g.kind === 'expense'
+                    || (g.kind === 'income' && (credit || g.groupId === e.groupId)))
+                .map((g) => ({ groupId: g.groupId, title: g.title + (g.kind === 'income' ? ' (+)' : '') }));
+        },
 
         // ------------------------------------------------------- lifecycle
 
@@ -125,7 +139,16 @@ function inboxView () {
                 const rule = FinImporter.findRule(this.imports, item.accountId, item.label);
                 const acct = this.accounts.find((a) => a.id === item.accountId);
                 const fallback = this.expenseGroups[0] ? this.expenseGroups[0].groupId : '';
-                const groupId = (rule && rule.groupId) || (acct && acct.groupId) || fallback;
+                // a credit's default depends on the SOURCE: on a bank account
+                // it's usually real income (payroll) → first income group; on
+                // a CARD (acct.credit) it's a payment or refund, never income
+                // → the account's expense group, as a negative expense. A RULE
+                // still wins either way, and every correction teaches one.
+                const incomeGroup = FinEngine.num(item.amount) < 0 && !(acct && acct.credit)
+                    ? this.month.groups.find((g) => g.kind === 'income') : null;
+                const groupId = (rule && rule.groupId)
+                    || (incomeGroup && incomeGroup.groupId)
+                    || (acct && acct.groupId) || fallback;
                 let targetId = '';
                 if (rule && rule.action === 'merge' && rule.target) {
                     const g = this.month.groups.find((g) => g.groupId === groupId);
@@ -196,7 +219,8 @@ function inboxView () {
 
         /** Merge targets for a draft: the chosen group's rows not already import-filled. */
         targetOptions (e) {
-            const g = this.month && this.month.groups.find((x) => x.groupId === e.groupId && x.kind === 'expense');
+            const g = this.month && this.month.groups.find((x) => x.groupId === e.groupId
+                && (x.kind === 'expense' || x.kind === 'income'));
             if (!g) return [];
             return g.fields
                 .filter((f) => !f.importId || f.id === e.targetId)
@@ -345,7 +369,7 @@ function inboxView () {
 
         async saveAccount (acct) {
             if (this.offline) return;
-            await this.apply([{ op: 'saveAccount', account: { id: acct.id, label: acct.label, groupId: acct.groupId || null } }]);
+            await this.apply([{ op: 'saveAccount', account: { id: acct.id, label: acct.label, groupId: acct.groupId || null, credit: !!acct.credit } }]);
         },
 
         async addAccount () {

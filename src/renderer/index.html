@@ -1537,9 +1537,9 @@
                                                  options have flushed - pre-selected suggestions and
                                                  programmatic resets both display correctly. -->
                                             <select @change="edits[item.id].groupId = $event.target.value; groupChanged(edits[item.id])" :disabled="frozen"
-                                                x-effect="const v = edits[item.id].groupId; expenseGroups; $nextTick(() => { $el.value = v })"
+                                                x-effect="const v = edits[item.id].groupId; destGroups(edits[item.id]); $nextTick(() => { $el.value = v })"
                                                 class="text-xs border border-zinc-200 rounded py-1.5 px-1 bg-white dark:bg-zinc-100 cursor-pointer max-w-36 focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                                                <template x-for="g in expenseGroups" :key="g.groupId">
+                                                <template x-for="g in destGroups(edits[item.id])" :key="g.groupId">
                                                     <option :value="g.groupId" x-text="g.title"></option>
                                                 </template>
                                             </select>
@@ -1640,6 +1640,10 @@
                                             <option :value="g.groupId" x-text="g.title"></option>
                                         </template>
                                     </select>
+                                    <label class="flex items-center gap-1 text-[11px] text-zinc-400 cursor-pointer select-none shrink-0"
+                                        title="Credit card account: money-in on it is a payment or refund, never income - credits draft as a negative expense instead of defaulting to Income">
+                                        <input type="checkbox" x-model="acct.credit" @change="saveAccount(acct)" :disabled="offline" class="accent-zinc-500">card
+                                    </label>
                                     <button type="button" @click="removeAccount(acct)" :disabled="offline" title="Remove this account mapping"
                                         class="w-7 h-7 shrink-0 rounded flex items-center justify-center cursor-pointer bg-zinc-100 text-zinc-400 hover:bg-red-100 dark:hover:bg-red-500/15 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-40"><svg class="w-3.5 h-3.5"><use href="#i-xmark"/></svg></button>
                                 </div>

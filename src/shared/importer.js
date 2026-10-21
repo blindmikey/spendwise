@@ -309,12 +309,15 @@
                     const existing = a.id && imports.accounts.find((x) => x.id === a.id);
                     if (existing) {
                         Object.assign(existing, { label: String(a.label || ''), groupId: a.groupId || null });
-                        // sfin (the SimpleFIN account binding) only changes when
-                        // explicitly sent - a rename from the UI must not sever it
+                        // sfin (the SimpleFIN binding) and credit (card flag)
+                        // only change when explicitly sent - a rename from the
+                        // UI must not sever or reset them
                         if (a.sfin !== undefined) existing.sfin = a.sfin;
+                        if (a.credit !== undefined) existing.credit = !!a.credit;
                     } else {
                         const fresh = { id: a.id || E().uuid(), label: String(a.label || ''), groupId: a.groupId || null };
                         if (a.sfin !== undefined) fresh.sfin = a.sfin;
+                        if (a.credit !== undefined) fresh.credit = !!a.credit;
                         imports.accounts.push(fresh);
                     }
                     break;
@@ -405,22 +408,35 @@
 
     // ------------------------------------------------------ month mutations
 
-    function expenseGroup (month, groupId) {
-        const groups = (month.groups || []).filter((g) => g.kind === E().KIND.EXPENSE);
-        return groups.find((g) => g.groupId === groupId) || groups[0] || null;
+    /** Publish/merge destinations: expense groups, and income groups (for
+        credits - the ledger keeps credits negative, income rows positive).
+        Unknown ids fall back to the first expense group. */
+    function targetGroup (month, groupId) {
+        const ok = (g) => g.kind === E().KIND.EXPENSE || g.kind === E().KIND.INCOME;
+        const groups = (month.groups || []).filter(ok);
+        return groups.find((g) => g.groupId === groupId)
+            || groups.find((g) => g.kind === E().KIND.EXPENSE)
+            || groups[0] || null;
+    }
+
+    /** Ledger amount (credits negative) → the value a row of this kind stores
+        (income rows hold positive values). */
+    function rowValue (kind, amount) {
+        return kind === E().KIND.INCOME ? -num(amount) : num(amount);
     }
 
     /**
-     * Publish: materialize the draft as a REAL expense row. accounted is set -
-     * a bank transaction already happened - and importId backlinks the item,
-     * which is both the badge and the derived-status anchor.
+     * Publish: materialize the draft as a REAL row - an expense, or income
+     * when the chosen group is income-kind (a payroll credit). accounted is
+     * set - a bank transaction already happened - and importId backlinks the
+     * item, which is both the badge and the derived-status anchor.
      */
     function publish (month, item, { groupId, label, amount }) {
-        const g = expenseGroup(month, groupId);
+        const g = targetGroup(month, groupId);
         if (!g) return null;
-        const f = E().newField(E().KIND.EXPENSE);
+        const f = E().newField(g.kind);
         f.label = String(label || item.label || '');
-        f.value = num(amount);
+        f.value = rowValue(g.kind, amount);
         f.accounted = true;
         f.importId = item.id;
         g.fields.push(f);
@@ -428,14 +444,16 @@
     }
 
     /**
-     * Merge: fill an existing row (the penciled-in "Electric") with the bank's
-     * actual figure. The row keeps its label; prev is returned for revert.
+     * Merge: fill an existing row (the penciled-in "Electric", or an income
+     * group's "Paycheck") with the bank's actual figure. The row keeps its
+     * label; prev is returned for revert.
      */
     function mergeInto (month, item, fieldId, { amount }) {
         const f = E().findField(month, fieldId);
         if (!f) return null;
+        const g = E().groupOfField(month, fieldId);
         const prev = { value: num(f.value), accounted: E().truthy(f.accounted) };
-        f.value = num(amount);
+        f.value = rowValue(g ? g.kind : E().KIND.EXPENSE, amount);
         f.accounted = true;
         f.importId = item.id;
         return prev;
@@ -469,7 +487,7 @@
      * proximity (±30% of a row that has a value and isn't import-filled).
      */
     function suggestTarget (month, groupId, item, takenIds) {
-        const g = expenseGroup(month, groupId);
+        const g = targetGroup(month, groupId);
         if (!g) return null;
         const taken = takenIds || new Set();
         const candidates = g.fields.filter((f) => !f.importId && !taken.has(f.id));

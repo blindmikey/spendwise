@@ -229,6 +229,12 @@ describe('applyOps', () => {
         expect(db.imports.accounts).toHaveLength(2);
         expect(db.imports.accounts[1]).toMatchObject({ label: 'Visa Card', groupId: 'g-exp' });
 
+        // the card flag persists and survives a rename that omits it
+        I.applyOps(db, [{ op: 'saveAccount', account: { id: acct.id, label: 'Visa Card', groupId: 'g-exp', credit: true } }]);
+        expect(db.imports.accounts[1].credit).toBe(true);
+        I.applyOps(db, [{ op: 'saveAccount', account: { id: acct.id, label: 'My Visa', groupId: 'g-exp' } }]);
+        expect(db.imports.accounts[1]).toMatchObject({ label: 'My Visa', credit: true });
+
         const rule = { accountId: 'acct-1', match: 'DUKE ENERGY', action: 'merge', groupId: 'g-exp', target: 'Electric' };
         I.applyOps(db, [{ op: 'saveRule', rule }]);
         I.applyOps(db, [{ op: 'saveRule', rule: { ...rule, action: 'publish', target: null } }]);
@@ -297,6 +303,26 @@ describe('month mutations + derived status', () => {
     it('publish falls back to the first expense group for unknown group ids', () => {
         const f = I.publish(month, item, { groupId: 'g-gone', label: 'X', amount: 1 });
         expect(E.groupOfField(month, f.id).groupId).toBe('g-exp');
+    });
+
+    it('a credit publishes into an income group as a positive income row', () => {
+        const credit = { ...item, amount: -2000 };
+        const f = I.publish(month, credit, { groupId: 'g-inc', label: 'Payroll · 10/3', amount: -2000 });
+        const g = E.groupOfField(month, f.id);
+        expect(g.groupId).toBe('g-inc');
+        expect(f).toMatchObject({ value: 2000, accounted: true, importId: item.id });
+    });
+
+    it('merging a credit into an income row flips the sign; revert restores', () => {
+        const inc = month.groups.find((g) => g.groupId === 'g-inc');
+        inc.fields.push({ id: 'f-pay', label: 'Paycheck', value: 3000, pinned: true, accounted: false, tags: [] });
+        const prev = I.mergeInto(month, item, 'f-pay', { amount: -3123.45 });
+        expect(prev).toEqual({ value: 3000, accounted: false });
+        const f = E.findField(month, 'f-pay');
+        expect(f).toMatchObject({ value: 3123.45, accounted: true, importId: item.id });
+        I.applyOps(db, [{ op: 'patchItem', id: item.id, set: { monthKey: '2026-10', fieldId: 'f-pay', action: 'merged', prev } }]);
+        expect(I.revert(month, db.imports.items[0])).toBe(true);
+        expect(f).toMatchObject({ value: 3000, accounted: false });
     });
 
     it('rollover drops importId from carried rows', () => {
