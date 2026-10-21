@@ -129,7 +129,7 @@ function simplefinControls () {
                 showToast('Connected to SimpleFIN', 'success');
                 await this.syncSf();
             } catch (e) {
-                showToast(e.message, 'error', 9000);
+                showToast(importsErrorMessage(e), 'error', 9000);
             } finally {
                 this.sf.busy = false;
             }
@@ -148,7 +148,7 @@ function simplefinControls () {
                     + `${res.added} new` + (res.skipped ? ` · ${res.skipped} already seen` : ''), 'success', 5000);
                 for (const w of res.warnings || []) showToast(String(w), 'error', 8000);
             } catch (e) {
-                showToast(e.message, 'error', 9000);
+                showToast(importsErrorMessage(e), 'error', 9000);
             } finally {
                 this.sf.busy = false;
             }
@@ -202,6 +202,17 @@ function readBankFile (file) {
         if (isXlsx) reader.readAsArrayBuffer(file);
         else reader.readAsText(file);
     });
+}
+
+/**
+ * Version skew: an older hosted spendwise-server refuses methods it predates
+ * with "only available in the desktop app" - wrong explanation for what is
+ * really a server that needs updating. Rephrase it on the import paths.
+ */
+function importsErrorMessage (e) {
+    return /only available in the desktop app/i.test((e && e.message) || '')
+        ? 'The connected server doesn\'t support bank imports yet - update spendwise-server on the machine hosting your data.'
+        : e.message;
 }
 
 /** Unwrap an IPC response; throws on { ok: false } and shows nothing itself. */

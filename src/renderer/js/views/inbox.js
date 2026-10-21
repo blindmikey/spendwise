@@ -1,4 +1,4 @@
-/* global Alpine, FinEngine, FinImporter, fmtExact, showToast, confirmDialog, simplefinControls, unwrap */
+/* global Alpine, FinEngine, FinImporter, fmtExact, showToast, confirmDialog, simplefinControls, importsErrorMessage, unwrap */
 'use strict';
 
 /**
@@ -297,7 +297,7 @@ function inboxView () {
                 return res;
             } catch (err) {
                 if (rollback) rollback();
-                showToast(err.message, 'error', 7000);
+                showToast(importsErrorMessage(err), 'error', 8000);
                 return null;
             } finally {
                 this.busy = false;
