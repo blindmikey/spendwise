@@ -1400,7 +1400,7 @@
              accounts, plus the CSV mapping step (views/inbox.js). Ledger
              actions persist immediately; published/merged rows ride the
              ordinary month save. -->
-        <x-modal toggle="inbox" wide="true">
+        <x-modal toggle="inbox" size="5xl">
             <div x-data="inboxView()">
                 <div class="flex items-start justify-between gap-3 mb-1">
                     <h2 class="text-lg font-black font-brand text-zinc-800">Imported transactions</h2>
@@ -1517,10 +1517,12 @@
                             <template x-for="item in pendingItems" :key="item.id">
                                 <template x-if="edits[item.id]">
                                     <div class="border-t border-zinc-100 py-3" :data-import-item="item.id">
-                                        <div class="flex items-center gap-1.5">
+                                        <!-- one line at desktop width (the modal is 5xl for exactly
+                                             this); flex-wrap flows it onto more lines on phones -->
+                                        <div class="flex items-center gap-1.5 flex-wrap">
                                             <span class="w-10 shrink-0 text-[11px] text-zinc-400 tabular-nums select-none" x-text="dateLabel(item)"></span>
                                             <input type="text" x-model="edits[item.id].label" :disabled="frozen" placeholder="Label"
-                                                class="flex-1 min-w-28 border border-zinc-200 rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white dark:text-[#c7e0da] dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                                                class="flex-1 min-w-40 border border-zinc-200 rounded px-2.5 py-1.5 text-sm bg-zinc-50 focus:bg-white dark:text-[#c7e0da] dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
                                             <div class="relative shrink-0">
                                                 <span class="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 text-xs select-none">$</span>
                                                 <!-- x-model WITHOUT .number: the amount stays the exact
@@ -1529,8 +1531,6 @@
                                                 <input type="number" step="0.01" x-model="edits[item.id].amount" :disabled="frozen" @paste="keepPastedText($event)"
                                                     class="w-24 border border-zinc-200 rounded pl-5 pr-1 py-1.5 text-sm dark:text-[#c7e0da] text-right bg-zinc-50 focus:bg-white dark:focus:bg-zinc-100 focus:outline-none focus:ring-1 focus:ring-emerald-500">
                                             </div>
-                                        </div>
-                                        <div class="flex items-center gap-1.5 mt-1.5 pl-10 flex-wrap">
                                             <span class="text-[11px] text-zinc-400 select-none">to</span>
                                             <!-- no x-model on these selects: its initial write lands
                                                  before the x-for options mount (and marks the select
@@ -1556,14 +1556,13 @@
                                                     <option :value="o.id" x-text="'merge into: ' + o.label"></option>
                                                 </template>
                                             </select>
-                                            <div class="flex-1"></div>
-                                            <label class="flex items-center gap-1 text-[11px] text-zinc-400 cursor-pointer select-none"
+                                            <label class="flex items-center gap-1 text-[11px] text-zinc-400 cursor-pointer select-none shrink-0"
                                                 title="Always dismiss this merchant - future imports matching it arrive pre-dismissed (undo under Rules)">
                                                 <input type="checkbox" x-model="edits[item.id].always" class="accent-zinc-500">always
                                             </label>
                                             <button type="button" @click="dismissItem(item)" :disabled="offline || busy"
-                                                title="Dismiss - ignore this transaction (it moves to Processed and can be restored)"
-                                                class="w-7 h-7 shrink-0 rounded flex items-center justify-center cursor-pointer bg-zinc-100 text-zinc-400 hover:bg-red-100 dark:hover:bg-red-500/15 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-40"><svg class="w-3.5 h-3.5"><use href="#i-xmark"/></svg></button>
+                                                title="Ignore this transaction - it moves to Processed and can be restored"
+                                                class="shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-3 py-1.5 cursor-pointer transition-colors border border-zinc-200 text-zinc-500 hover:border-red-400 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-40">Dismiss</button>
                                             <button type="button" @click="publishItem(item)" :disabled="frozen || offline || busy"
                                                 class="shrink-0 font-bold uppercase tracking-widest text-[11px] rounded-md px-3.5 py-1.5 cursor-pointer transition-colors text-white disabled:bg-zinc-200 disabled:text-zinc-400"
                                                 :class="edits[item.id].targetId ? 'bg-violet-600 hover:bg-violet-500' : 'bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-400/70 dark:text-[#1b1e25]'"
@@ -1822,12 +1821,15 @@
 <!-- ============================================ component templates -->
 
 <template x-component="modal">
-    <div x-data="xProps($el, { toggle: '', wide: '' })" x-init="_initProps()"
+    <!-- size: an explicit max-width step ('3xl', '5xl') for content-heavy
+         modals; literal class strings below so Tailwind generates them -->
+    <div x-data="xProps($el, { toggle: '', wide: '', size: '' })" x-init="_initProps()"
         x-show="$store.ui.modals[toggle]" x-transition.opacity.duration.150ms
         class="fixed inset-0 z-40 flex items-center justify-center"
         @keydown.escape.window="$store.ui.modals[toggle] = false">
         <div class="absolute inset-0 bg-zinc-900/50 dark:bg-black/60 backdrop-blur-[2px] cursor-pointer" @click="$store.ui.modals[toggle] = false"></div>
-        <div class="relative bg-white dark:bg-zinc-100 rounded-xl shadow-2xl max-h-[88vh] overflow-y-auto p-8 mx-4 w-full" :class="boolAttr(wide) ? 'max-w-2xl' : 'max-w-xl'">
+        <div class="relative bg-white dark:bg-zinc-100 rounded-xl shadow-2xl max-h-[88vh] overflow-y-auto p-8 mx-4 w-full"
+            :class="{ '3xl': 'max-w-3xl', '5xl': 'max-w-5xl' }[size] || (boolAttr(wide) ? 'max-w-2xl' : 'max-w-xl')">
             <slot></slot>
         </div>
     </div>
